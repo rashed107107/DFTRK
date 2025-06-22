@@ -1,0 +1,145 @@
+@model IEnumerable<DFTRK.Models.WholesalerProduct>
+
+@{
+    ViewData["Title"] = "Available Products";
+    var searchString = Context.Request.Query["searchString"];
+    var categoryId = Context.Request.Query["categoryId"];
+}
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1>Available Products</h1>
+        </div>
+        <div class="col-md-4 text-end">
+            <a asp-controller="Cart" asp-action="Index" class="btn btn-outline-primary">
+                <i class="bi bi-cart"></i> View Cart
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Search & Filter</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Index" method="get" class="row g-3">
+                        <div class="col-md-5">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" name="searchString" value="@searchString" class="form-control" placeholder="Search by name or description..." />
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                                <select name="categoryId" class="form-select">
+                                    <option value="">All Categories</option>
+                                    @foreach (var category in ViewBag.Categories ?? new List<DFTRK.Models.Category>())
+                                    {
+                                        <option value="@category.Id" selected="@(categoryId == category.Id.ToString())">@category.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Search</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info" role="alert">
+            <h4 class="alert-heading">No products found!</h4>
+            <p>We couldn't find any products matching your criteria. Please try a different search or check back later.</p>
+            <hr>
+            <p class="mb-0">
+                <a asp-action="Index" class="btn btn-outline-primary">Clear all filters</a>
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="text-muted mb-0">Showing @Model.Count() products</p>
+                    <div class="btn-group" role="group">
+                        <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Clear filters</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            @foreach (var item in Model)
+            {
+                <div class="col">
+                    <div class="card h-100 shadow-sm">
+                        @if (!string.IsNullOrEmpty(item.Product.ImageUrl))
+                        {
+                            <img src="@item.Product.ImageUrl" class="card-img-top" alt="@item.Product.Name" style="height: 200px; object-fit: cover;">
+                        }
+                        else
+                        {
+                            <div class="card-img-top bg-light text-center p-5" style="height: 200px;">
+                                <i class="bi bi-box-seam" style="font-size: 3rem;"></i>
+                            </div>
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@item.Product.Name</h5>
+                            <p class="card-text text-muted small">
+                                <span class="badge bg-light text-dark">@item.Product.Category.Name</span>
+                                <span class="badge bg-light text-dark">@item.Wholesaler.BusinessName</span>
+                            </p>
+                            @if (!string.IsNullOrEmpty(item.Product.Description))
+                            {
+                                <p class="card-text">@(item.Product.Description.Length > 100 ? item.Product.Description.Substring(0, 100) + "..." : item.Product.Description)</p>
+                            }
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <h5 class="mb-0 text-primary">$@item.Price.ToString("F2")</h5>
+                                <span class="badge bg-@(item.StockQuantity > 10 ? "success" : "warning")">
+                                    @(item.StockQuantity > 10 ? "In Stock" : $"Only {item.StockQuantity} left")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0">
+                            <div class="d-flex justify-content-between">
+                                <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-outline-primary">View Details</a>
+                                <form asp-action="AddToCart" method="post">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="quantity" value="1" />
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-cart-plus"></i> Add to Cart
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+            
+            // Handle category filter change
+            $('#categoryFilter').change(function() {
+                $(this).closest('form').submit();
+            });
+        });
+    </script>
+} 

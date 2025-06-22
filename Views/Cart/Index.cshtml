@@ -1,0 +1,122 @@
+@model DFTRK.ViewModels.CartViewModel
+
+@{
+    ViewData["Title"] = "My Cart";
+}
+
+<div class="container">
+    <h1>My Cart</h1>
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="alert alert-info">
+            <p>Your cart is empty.</p>
+            <a asp-controller="Products" asp-action="Index" class="btn btn-primary mt-2">Browse Products</a>
+        </div>
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Shopping Cart (@Model.Items.Count items)</h5>
+            </div>
+            <div class="card-body">
+                @* Group items by wholesaler *@
+                @{
+                    var itemsByWholesaler = Model.Items.GroupBy(i => new { i.WholesalerId, i.WholesalerName })
+                                                  .OrderBy(g => g.Key.WholesalerName)
+                                                  .ToList();
+                }
+
+                @foreach (var group in itemsByWholesaler)
+                {
+                    var wholesalerId = group.Key.WholesalerId;
+                    var wholesalerName = group.Key.WholesalerName;
+                    var wholesalerTotal = group.Sum(i => i.Subtotal);
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="mb-0">Supplier: @wholesalerName</h5>
+                            <a asp-action="Checkout" asp-route-wholesalerId="@wholesalerId" class="btn btn-sm btn-primary">
+                                Checkout from @wholesalerName ($@wholesalerTotal.ToString("F2"))
+                            </a>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead class="text-muted">
+                                    <tr>
+                                        <th scope="col" class="text-center" style="width: 100px;"></th>
+                                        <th scope="col">Product</th>
+                                        <th scope="col" class="text-center">Quantity</th>
+                                        <th scope="col" class="text-end">Price</th>
+                                        <th scope="col" class="text-end">Subtotal</th>
+                                        <th scope="col" class="text-center" style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in group)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.ProductImageUrl))
+                                                {
+                                                    <img src="@item.ProductImageUrl" alt="@item.ProductName" class="img-fluid rounded" style="max-width: 80px;" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="bg-light text-center rounded" style="width: 80px; height: 80px;">
+                                                        <i class="bi bi-image" style="font-size: 2rem; line-height: 80px;"></i>
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <a asp-controller="Products" asp-action="Details" asp-route-id="@item.WholesalerProductId" class="text-decoration-none">
+                                                        <h6 class="mb-0">@item.ProductName</h6>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <form asp-action="UpdateQuantity" method="post" class="d-inline">
+                                                    <input type="hidden" name="id" value="@item.Id" />
+                                                    <div class="input-group input-group-sm" style="width: 120px;">
+                                                        <button class="btn btn-outline-secondary" type="submit" name="action" value="decrease">-</button>
+                                                        <input type="text" name="quantity" value="@item.Quantity" class="form-control text-center" />
+                                                        <button class="btn btn-outline-secondary" type="submit" name="action" value="increase">+</button>
+                                                    </div>
+                                                </form>
+                                            </td>
+                                            <td class="text-end">$@item.UnitPrice.ToString("F2")</td>
+                                            <td class="text-end">$@item.Subtotal.ToString("F2")</td>
+                                            <td class="text-center">
+                                                <form asp-action="Remove" method="post">
+                                                    <input type="hidden" name="id" value="@item.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <hr />
+                    </div>
+                }
+            </div>
+            <div class="card-footer bg-white border-top">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a asp-controller="Products" asp-action="Index" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Continue Shopping
+                    </a>
+                    <div class="text-end">
+                        <h5 class="mb-0">Total: $@Model.TotalAmount.ToString("F2")</h5>
+                        <p class="text-muted small mt-1">Please checkout from each supplier individually</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div> 

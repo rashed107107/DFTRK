@@ -1,0 +1,96 @@
+@model DFTRK.ViewModels.RetailerProductEditViewModel
+
+@{
+    ViewData["Title"] = "Edit Product";
+}
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Edit Product</h1>
+        <a asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Inventory
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">@Model.ProductName</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="Id" />
+                        <input type="hidden" asp-for="ProductName" />
+                        
+                        <div class="mb-3">
+                            <label asp-for="PurchasePrice" class="form-label">Purchase Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input asp-for="PurchasePrice" class="form-control" readonly />
+                            </div>
+                            <div class="form-text text-muted">Purchase price is set at the time of order and cannot be changed.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label asp-for="SellingPrice" class="form-label">Selling Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input asp-for="SellingPrice" class="form-control" />
+                            </div>
+                            <span asp-validation-for="SellingPrice" class="text-danger"></span>
+                            <div class="form-text">Set your selling price. Current profit margin: <span id="profitMargin">0%</span></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label asp-for="StockQuantity" class="form-label">Stock Quantity</label>
+                            <input asp-for="StockQuantity" class="form-control" />
+                            <span asp-validation-for="StockQuantity" class="text-danger"></span>
+                            <div class="form-text text-muted">Adjust your stock quantity if needed.</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function() {
+            function updateProfitMargin() {
+                var purchasePrice = parseFloat($("#PurchasePrice").val());
+                var sellingPrice = parseFloat($("#SellingPrice").val());
+                
+                if (!isNaN(purchasePrice) && !isNaN(sellingPrice) && purchasePrice > 0) {
+                    var margin = ((sellingPrice - purchasePrice) / purchasePrice * 100).toFixed(2);
+                    var marginClass = "";
+                    
+                    if (margin < 10) {
+                        marginClass = "text-danger";
+                    } else if (margin < 20) {
+                        marginClass = "text-warning";
+                    } else {
+                        marginClass = "text-success";
+                    }
+                    
+                    $("#profitMargin").removeClass("text-danger text-warning text-success").addClass(marginClass).text(margin + "%");
+                }
+            }
+            
+            // Initial calculation
+            updateProfitMargin();
+            
+            // Update on change
+            $("#SellingPrice").on("input", updateProfitMargin);
+        });
+    </script>
+} 

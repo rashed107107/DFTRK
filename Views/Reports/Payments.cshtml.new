@@ -1,0 +1,257 @@
+@model DFTRK.ViewModels.PaymentsReportViewModel
+@using DFTRK.Models
+@{
+    ViewData["Title"] = "Payment Reports";
+}
+
+<div class="container-fluid">
+    <h1 class="mt-4">Payment Reports</h1>
+    <p class="lead">View and analyze payment activities</p>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-calendar me-1"></i>
+            Filter by Date Range
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate" name="startDate" value="@Model.StartDate.ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-4">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate" name="endDate" value="@Model.EndDate.ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-4 align-self-end">
+                    <button type="submit" class="btn btn-primary">Apply Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Summary Cards -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Total Payments</h5>
+                            <h2 class="display-6">@Model.TotalPayments</h2>
+                        </div>
+                        <i class="fas fa-money-bill-wave fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Total Amount</h5>
+                            <h2 class="display-6">$@Model.TotalAmount.ToString("N2")</h2>
+                        </div>
+                        <i class="fas fa-dollar-sign fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Average Payment</h5>
+                            <h2 class="display-6">$@(Model.TotalPayments > 0 ? (Model.TotalAmount / Model.TotalPayments).ToString("N2") : "0.00")</h2>
+                        </div>
+                        <i class="fas fa-chart-line fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Date Range</h5>
+                            <p class="mb-0">@Model.StartDate.ToString("MMM dd") - @Model.EndDate.ToString("MMM dd, yyyy")</p>
+                        </div>
+                        <i class="fas fa-calendar-alt fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Payment Method Chart -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-pie me-1"></i>
+                    Payments by Method
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Payment Method</th>
+                                    <th>Count</th>
+                                    <th>Amount</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.ChartData)
+                                {
+                                    var percentage = Model.TotalAmount > 0 ? (item.Value / Model.TotalAmount * 100) : 0;
+                                    <tr>
+                                        <td>@item.Label</td>
+                                        <td>@item.Count</td>
+                                        <td>$@item.Value.ToString("N2")</td>
+                                        <td>
+                                            <div class="progress">
+                                                <div class="progress-bar" role="progressbar" style="width: @percentage%;" 
+                                                     aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100">
+                                                    @percentage.ToString("N1")%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Trend -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-1"></i>
+                    Recent Payment Activity
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Count</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var paymentsByDate = Model.Payments
+                                        .GroupBy(p => p.PaymentDate.Date)
+                                        .Select(g => new
+                                        {
+                                            Date = g.Key,
+                                            Count = g.Count(),
+                                            Amount = g.Sum(p => p.Amount)
+                                        })
+                                        .OrderByDescending(p => p.Date)
+                                        .Take(7);
+                                }
+                                @foreach (var day in paymentsByDate)
+                                {
+                                    <tr>
+                                        <td>@day.Date.ToString("MMM dd, yyyy")</td>
+                                        <td>@day.Count</td>
+                                        <td>$@day.Amount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Payments Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            Recent Payments
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="paymentsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Method</th>
+                            <th>Order</th>
+                            <th>Retailer</th>
+                            <th>Wholesaler</th>
+                            <th>Reference</th>
+                            <th>Transaction Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var payment in Model.Payments.Take(20))
+                        {
+                            <tr>
+                                <td>@payment.Id</td>
+                                <td>@payment.PaymentDate.ToString("MMM dd, yyyy")</td>
+                                <td>$@payment.Amount.ToString("N2")</td>
+                                <td>@payment.Method</td>
+                                <td>
+                                    @if (payment.Transaction?.Order != null)
+                                    {
+                                        <a href="@Url.Action("Details", "Orders", new { id = payment.Transaction.Order.Id })">
+                                            #@payment.Transaction.Order.Id
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @(payment.Transaction?.Order?.Retailer?.BusinessName ?? "-")
+                                </td>
+                                <td>
+                                    @(payment.Transaction?.Order?.Wholesaler?.BusinessName ?? "-")
+                                </td>
+                                <td>@payment.ReferenceNumber</td>
+                                <td>
+                                    @{
+                                        var statusClass = payment.Transaction?.Status switch
+                                        {
+                                            TransactionStatus.Completed => "badge bg-success",
+                                            TransactionStatus.Pending => "badge bg-warning",
+                                            TransactionStatus.Failed => "badge bg-danger",
+                                            _ => "badge bg-secondary"
+                                        };
+                                    }
+                                    <span class="@statusClass">@(payment.Transaction?.Status.ToString() ?? "Unknown")</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#paymentsTable').DataTable({
+                order: [[1, 'desc']]
+            });
+        });
+    </script>
+}

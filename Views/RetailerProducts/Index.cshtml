@@ -1,0 +1,173 @@
+@model IEnumerable<DFTRK.ViewModels.RetailerProductViewModel>
+
+@{
+    ViewData["Title"] = "My Inventory";
+}
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>My Inventory</h1>
+        <div>
+            <a asp-controller="Products" asp-action="Index" class="btn btn-primary">
+                <i class="bi bi-cart-plus me-2"></i>Purchase Products
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger mb-4">
+            @TempData["Error"]
+        </div>
+    }
+
+    @if (TempData["Warning"] != null)
+    {
+        <div class="alert alert-warning mb-4">
+            @TempData["Warning"]
+        </div>
+    }
+
+    @if (TempData["Info"] != null)
+    {
+        <div class="alert alert-info mb-4">
+            @TempData["Info"]
+        </div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mb-4">
+            @TempData["Success"]
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">
+            <h5 class="alert-heading">Your inventory is empty!</h5>
+            <p>You currently don't have any products in your inventory. Start by purchasing products from wholesalers.</p>
+            <hr>
+            <p class="mb-0">
+                <a asp-controller="Products" asp-action="Index" class="btn btn-primary">Browse Products</a>
+                <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary ms-2">View My Orders</a>
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Products in Stock (@Model.Count())</h5>
+                    <div class="input-group" style="width: 300px;">
+                        <input type="text" id="inventorySearch" class="form-control" placeholder="Search inventory...">
+                        <button class="btn btn-outline-secondary" type="button">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="inventoryTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Supplier</th>
+                                <th class="text-end">Purchase Price</th>
+                                <th class="text-end">Selling Price</th>
+                                <th class="text-center">Stock</th>
+                                <th class="text-center">Profit Margin</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model)
+                            {
+                                if (item?.WholesalerProduct?.Product == null)
+                                {
+                                    continue;
+                                }
+                                
+                                var profitClass = item.ProfitMargin < 10 ? "text-danger" : 
+                                                 item.ProfitMargin < 20 ? "text-warning" : 
+                                                 "text-success";
+
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            @if (!string.IsNullOrEmpty(item.WholesalerProduct.Product.ImageUrl))
+                                            {
+                                                <img src="@item.WholesalerProduct.Product.ImageUrl" alt="@item.WholesalerProduct.Product.Name" 
+                                                     class="rounded me-2" width="40" height="40" style="object-fit: cover;">
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center" 
+                                                     style="width: 40px; height: 40px;">
+                                                    <i class="bi bi-image text-muted"></i>
+                                                </div>
+                                            }
+                                            <a asp-action="Details" asp-route-id="@item.Id" class="text-decoration-none">
+                                                @item.WholesalerProduct.Product.Name
+                                            </a>
+                                        </div>
+                                    </td>
+                                    <td>@(item.WholesalerProduct.Product.Category?.Name ?? "Unknown")</td>
+                                    <td>@(item.WholesalerProduct.Wholesaler?.BusinessName ?? "Unknown")</td>
+                                    <td class="text-end">$@item.PurchasePrice.ToString("F2")</td>
+                                    <td class="text-end">$@item.SellingPrice.ToString("F2")</td>
+                                    <td class="text-center">
+                                        @if (item.StockQuantity > 10)
+                                        {
+                                            <span class="badge bg-success">@item.StockQuantity</span>
+                                        }
+                                        else if (item.StockQuantity > 0)
+                                        {
+                                            <span class="badge bg-warning">@item.StockQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger">Out of stock</span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="@profitClass">@item.ProfitMargin%</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group">
+                                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </a>
+                                            <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi bi-info-circle"></i> Details
+                                            </a>
+                                            <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $("#inventorySearch").on("keyup", function () {
+                var value = $(this).val().toLowerCase();
+                $("#inventoryTable tbody tr").filter(function () {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+                });
+            });
+        });
+    </script>
+} 

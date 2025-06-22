@@ -1,0 +1,236 @@
+@model DFTRK.Models.Order
+
+@{
+    ViewData["Title"] = "Order Details";
+    
+    bool isAdmin = User.IsInRole("Admin");
+    bool isWholesaler = User.IsInRole("Wholesaler");
+    bool isRetailer = User.IsInRole("Retailer");
+}
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Order #@Model.Id</h1>
+        <a asp-action="Index" class="btn btn-outline-secondary">Back to Orders</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Order Items</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-center">Quantity</th>
+                                    <th class="text-end">Unit Price</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Items != null)
+                                {
+                                    @foreach (var item in Model.Items)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <h6 class="mb-0">@item.WholesalerProduct.Product.Name</h6>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">@item.Quantity</td>
+                                            <td class="text-end">$@item.UnitPrice.ToString("F2")</td>
+                                            <td class="text-end">$@item.Subtotal.ToString("F2")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                                    <td class="text-end"><strong>$@Model.TotalAmount.ToString("F2")</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Order Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Order Date:</dt>
+                        <dd class="col-sm-7">@Model.OrderDate.ToString("MMM d, yyyy")</dd>
+
+                        <dt class="col-sm-5">Status:</dt>
+                        <dd class="col-sm-7">
+                            @switch (Model.Status)
+                            {
+                                case DFTRK.Models.OrderStatus.Pending:
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                    break;
+                                case DFTRK.Models.OrderStatus.Processing:
+                                    <span class="badge bg-info">Processing</span>
+                                    break;
+                                case DFTRK.Models.OrderStatus.Shipped:
+                                    <span class="badge bg-primary">Shipped</span>
+                                    break;
+                                case DFTRK.Models.OrderStatus.Delivered:
+                                    <span class="badge bg-success">Delivered</span>
+                                    break;
+                                case DFTRK.Models.OrderStatus.Completed:
+                                    <span class="badge bg-success">Completed</span>
+                                    break;
+                                case DFTRK.Models.OrderStatus.Cancelled:
+                                    <span class="badge bg-danger">Cancelled</span>
+                                    break;
+                                default:
+                                    <span class="badge bg-secondary">@Model.Status</span>
+                                    break;
+                            }
+                        </dd>
+
+                        @if (isAdmin || isRetailer)
+                        {
+                            <dt class="col-sm-5">Wholesaler:</dt>
+                            <dd class="col-sm-7">@Model.Wholesaler?.BusinessName</dd>
+                        }
+
+                        @if (isAdmin || isWholesaler)
+                        {
+                            <dt class="col-sm-5">Retailer:</dt>
+                            <dd class="col-sm-7">@Model.Retailer?.BusinessName</dd>
+                        }
+
+                        @if (!string.IsNullOrEmpty(Model.Notes))
+                        {
+                            <dt class="col-sm-12 mt-3">Notes:</dt>
+                            <dd class="col-sm-12">
+                                <p class="alert alert-light">@Model.Notes</p>
+                            </dd>
+                        }
+                    </dl>
+                </div>
+                @if (Model.Status != DFTRK.Models.OrderStatus.Completed && 
+                     Model.Status != DFTRK.Models.OrderStatus.Cancelled)
+                {
+                    <div class="card-footer bg-white">
+                        <div class="d-grid gap-2">
+                            @if (isWholesaler && Model.Status == DFTRK.Models.OrderStatus.Pending)
+                            {
+                                <a asp-action="Process" asp-route-id="@Model.Id" class="btn btn-success">Process Order</a>
+                            }
+                            @if (isWholesaler && Model.Status == DFTRK.Models.OrderStatus.Processing)
+                            {
+                                <a asp-action="Ship" asp-route-id="@Model.Id" class="btn btn-primary">Mark as Shipped</a>
+                            }
+                            @if (isRetailer && Model.Status == DFTRK.Models.OrderStatus.Shipped)
+                            {
+                                <a asp-action="ConfirmDelivery" asp-route-id="@Model.Id" class="btn btn-success">Confirm Delivery</a>
+                            }
+                            @if (isRetailer && Model.Status == DFTRK.Models.OrderStatus.Pending)
+                            {
+                                <a asp-action="Cancel" asp-route-id="@Model.Id" class="btn btn-danger">Cancel Order</a>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (Model.Transaction != null)
+            {
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Payment Information</h5>
+                            <a asp-controller="Payments" asp-action="Details" asp-route-id="@Model.Transaction.Id" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-credit-card me-1"></i>Payment Details
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-5">Transaction #:</dt>
+                            <dd class="col-sm-7">@Model.Transaction.Id</dd>
+
+                            <dt class="col-sm-5">Date:</dt>
+                            <dd class="col-sm-7">@Model.Transaction.TransactionDate.ToString("MMM d, yyyy")</dd>
+
+                            <dt class="col-sm-5">Total Amount:</dt>
+                            <dd class="col-sm-7">$@Model.Transaction.Amount.ToString("F2")</dd>
+                            
+                            <dt class="col-sm-5">Amount Paid:</dt>
+                            <dd class="col-sm-7">$@Model.Transaction.AmountPaid.ToString("F2")</dd>
+                            
+                            <dt class="col-sm-5">Remaining:</dt>
+                            <dd class="col-sm-7">
+                                @{
+                                    var remaining = Model.Transaction.Amount - Model.Transaction.AmountPaid;
+                                    var textClass = remaining > 0 ? "text-danger" : "text-success";
+                                }
+                                <span class="@textClass">$@remaining.ToString("F2")</span>
+                            </dd>
+
+                            <dt class="col-sm-5">Status:</dt>
+                            <dd class="col-sm-7">
+                                @switch (Model.Transaction.Status)
+                                {
+                                    case DFTRK.Models.TransactionStatus.Pending:
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.PartiallyPaid:
+                                        <span class="badge bg-info">Partially Paid</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Completed:
+                                        <span class="badge bg-success">Paid</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Failed:
+                                        <span class="badge bg-danger">Failed</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Refunded:
+                                        <span class="badge bg-info">Refunded</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary">@Model.Transaction.Status</span>
+                                        break;
+                                }
+                            </dd>
+
+                            @if (!string.IsNullOrEmpty(Model.Transaction.PaymentMethod))
+                            {
+                                <dt class="col-sm-5">Method:</dt>
+                                <dd class="col-sm-7">@Model.Transaction.PaymentMethod</dd>
+                            }
+
+                            @if (!string.IsNullOrEmpty(Model.Transaction.TransactionReference))
+                            {
+                                <dt class="col-sm-5">Reference:</dt>
+                                <dd class="col-sm-7">@Model.Transaction.TransactionReference</dd>
+                            }
+                        </dl>
+                        
+                        @if (User.IsInRole("Retailer") && 
+                             (Model.Transaction.Status == DFTRK.Models.TransactionStatus.Pending || 
+                              Model.Transaction.Status == DFTRK.Models.TransactionStatus.PartiallyPaid))
+                        {
+                            <div class="mt-3">
+                                <a asp-controller="Payments" asp-action="MakePayment" asp-route-id="@Model.Transaction.Id" class="btn btn-primary">
+                                    <i class="bi bi-credit-card me-2"></i>Make Payment
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div> 

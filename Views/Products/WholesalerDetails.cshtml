@@ -1,0 +1,65 @@
+@model DFTRK.Models.WholesalerProduct
+
+@{
+    ViewData["Title"] = "Product Details";
+}
+
+<h1>Product Details</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        @if (!string.IsNullOrEmpty(Model.Product.ImageUrl))
+        {
+            <img src="@Model.Product.ImageUrl" alt="@Model.Product.Name" class="img-fluid rounded mb-3" />
+        }
+        else
+        {
+            <div class="bg-light text-center p-5 rounded mb-3">
+                <i class="bi bi-image" style="font-size: 5rem;"></i>
+            </div>
+        }
+    </div>
+    <div class="col-md-8">
+        <dl class="row">
+            <dt class="col-sm-3">Product Name</dt>
+            <dd class="col-sm-9">@Model.Product.Name</dd>
+
+            <dt class="col-sm-3">Category</dt>
+            <dd class="col-sm-9">@Model.Product.Category.Name</dd>
+
+            <dt class="col-sm-3">Description</dt>
+            <dd class="col-sm-9">@Model.Product.Description</dd>
+
+            <dt class="col-sm-3">Your Price</dt>
+            <dd class="col-sm-9">$@Model.Price.ToString("F2")</dd>
+
+            <dt class="col-sm-3">Stock Quantity</dt>
+            <dd class="col-sm-9">@Model.StockQuantity</dd>
+
+            <dt class="col-sm-3">Status</dt>
+            <dd class="col-sm-9">
+                @if (Model.IsActive)
+                {
+                    <span class="badge bg-success">Active</span>
+                }
+                else
+                {
+                    <span class="badge bg-danger">Inactive</span>
+                }
+            </dd>
+        </dl>
+
+        <div class="mt-4">
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-primary">Edit</a>
+            <a asp-action="Index" class="btn btn-secondary">Back to List</a>
+            @if (Model.IsActive)
+            {
+                <a asp-action="Deactivate" asp-route-id="@Model.Id" class="btn btn-warning">Deactivate</a>
+            }
+            else
+            {
+                <a asp-action="Activate" asp-route-id="@Model.Id" class="btn btn-success">Activate</a>
+            }
+        </div>
+    </div>
+</div> 

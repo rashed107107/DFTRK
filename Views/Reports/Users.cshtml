@@ -1,0 +1,265 @@
+@model IEnumerable<DFTRK.ViewModels.UserReportViewModel>
+@{
+    ViewData["Title"] = "User Reports";
+}
+
+<div class="container-fluid">
+    <h1 class="mt-4">User Reports</h1>
+    <p class="lead">View and analyze user activities and performance</p>
+
+    <div class="row">
+        <!-- Summary Cards -->
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Total Users</h5>
+                            <h2 class="display-6">@Model.Count()</h2>
+                        </div>
+                        <i class="fas fa-users fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Retailers</h5>
+                            <h2 class="display-6">@Model.Count(u => u.Role == "Retailer")</h2>
+                        </div>
+                        <i class="fas fa-store fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Wholesalers</h5>
+                            <h2 class="display-6">@Model.Count(u => u.Role == "Wholesaler")</h2>
+                        </div>
+                        <i class="fas fa-warehouse fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Admins</h5>
+                            <h2 class="display-6">@Model.Count(u => u.Role == "Admin")</h2>
+                        </div>
+                        <i class="fas fa-user-shield fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Top Retailers -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-store me-1"></i>
+                    Top Retailers by Spending
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Business Name</th>
+                                    <th>Orders</th>
+                                    <th>Total Spent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var retailer in Model.Where(u => u.Role == "Retailer")
+                                                              .OrderByDescending(u => u.TotalSpent)
+                                                              .Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("RetailerPerformance", new { id = retailer.Id })">
+                                                @(string.IsNullOrEmpty(retailer.BusinessName) ? retailer.UserName : retailer.BusinessName)
+                                            </a>
+                                        </td>
+                                        <td>@retailer.OrderCount</td>
+                                        <td>$@retailer.TotalSpent.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Wholesalers -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-warehouse me-1"></i>
+                    Top Wholesalers by Revenue
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Business Name</th>
+                                    <th>Orders</th>
+                                    <th>Total Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var wholesaler in Model.Where(u => u.Role == "Wholesaler")
+                                                                .OrderByDescending(u => u.TotalEarned)
+                                                                .Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <a href="@Url.Action("WholesalerPerformance", new { id = wholesaler.Id })">
+                                                @(string.IsNullOrEmpty(wholesaler.BusinessName) ? wholesaler.UserName : wholesaler.BusinessName)
+                                            </a>
+                                        </td>
+                                        <td>@wholesaler.OrderCount</td>
+                                        <td>$@wholesaler.TotalEarned.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Analysis -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-users me-1"></i>
+            User Analysis
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>User Distribution by Role</h5>
+                    <div class="mb-4">
+                        @{
+                            var roles = Model.GroupBy(u => u.Role)
+                                             .Select(g => new { Role = g.Key, Count = g.Count() })
+                                             .OrderByDescending(r => r.Count);
+                            
+                            var totalUsers = Model.Count();
+                        }
+                        
+                        @foreach (var role in roles)
+                        {
+                            var percentage = totalUsers > 0 ? (role.Count * 100 / totalUsers) : 0;
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>@role.Role</span>
+                                    <span>@role.Count (@percentage%)</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" style="width: @percentage%;" 
+                                         aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h5>Recent User Activity</h5>
+                    <div class="mb-4">
+                        @{
+                            var recentUsers = Model.OrderByDescending(u => u.RegistrationDate).Take(5);
+                        }
+                        
+                        @foreach (var user in recentUsers)
+                        {
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>@(string.IsNullOrEmpty(user.BusinessName) ? user.UserName : user.BusinessName)</span>
+                                    <span class="badge bg-primary">@user.Role</span>
+                                </div>
+                                <small class="text-muted">Joined: @user.RegistrationDate.ToString("MMM dd, yyyy")</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Users Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            All Users
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>Business Name</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Registration Date</th>
+                            <th>Orders</th>
+                            <th>Total Spent</th>
+                            <th>Total Earned</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in Model)
+                        {
+                            <tr>
+                                <td>@user.BusinessName</td>
+                                <td>@user.UserName</td>
+                                <td>@user.Email</td>
+                                <td>
+                                    @{
+                                        var roleClass = user.Role switch
+                                        {
+                                            "Admin" => "badge bg-warning",
+                                            "Retailer" => "badge bg-success",
+                                            "Wholesaler" => "badge bg-info",
+                                            _ => "badge bg-secondary"
+                                        };
+                                    }
+                                    <span class="@roleClass">@user.Role</span>
+                                </td>
+                                <td>@user.RegistrationDate.ToString("MMM dd, yyyy")</td>
+                                <td>@user.OrderCount</td>
+                                <td>@(user.Role == "Retailer" ? "$" + user.TotalSpent.ToString("N2") : "-")</td>
+                                <td>@(user.Role == "Wholesaler" ? "$" + user.TotalEarned.ToString("N2") : "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#usersTable').DataTable({
+                order: [[4, 'desc']]
+            });
+        });
+    </script>
+} 

@@ -1,0 +1,645 @@
+@model DFTRK.ViewModels.RetailerDashboardViewModel
+
+@{
+    ViewData["Title"] = "Retailer Dashboard";
+}
+
+<style>
+    .dashboard-card {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        overflow: hidden;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+
+    .metric-card {
+        padding: 1.5rem;
+        text-align: center;
+        border-left: 4px solid;
+    }
+
+    .metric-card.primary { border-left-color: #007bff; }
+    .metric-card.success { border-left-color: #28a745; }
+    .metric-card.info { border-left-color: #17a2b8; }
+    .metric-card.warning { border-left-color: #ffc107; }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+        color: #2c3e50;
+    }
+
+    .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    .section-card {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+    }
+
+    .section-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        padding: 1rem 1.5rem;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .section-header h5 {
+        margin: 0;
+        color: #495057;
+        font-weight: 600;
+    }
+
+    .section-header i {
+        color: #007bff;
+        margin-right: 0.5rem;
+    }
+
+    .stats-item {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .progress-modern {
+        height: 8px;
+        border-radius: 10px;
+        background: #f8f9fa;
+    }
+
+    .progress-modern .progress-bar {
+        border-radius: 10px;
+    }
+
+    .btn-modern {
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    .btn-modern:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem 0;
+        margin: -1.5rem -1.5rem 2rem -1.5rem;
+        border-radius: 0 0 20px 20px;
+    }
+
+    .badge-modern {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .alert-simple {
+        background: #fff3cd;
+        border: 1px solid #ffecb5;
+        border-left: 4px solid #ffc107;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .alert-simple.danger {
+        background: #f8d7da;
+        border-color: #f5c6cb;
+        border-left-color: #dc3545;
+    }
+
+    .alert-simple.info {
+        background: #d1ecf1;
+        border-color: #bee5eb;
+        border-left-color: #17a2b8;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">Retailer Dashboard</h1>
+                    <p class="mb-0 opacity-75">Comprehensive insights into your retail operations</p>
+                </div>
+                <div>
+                    <a asp-controller="Reports" asp-action="RetailerPerformance" class="btn btn-light btn-modern">
+                        <i class="bi bi-graph-up me-2"></i>Detailed Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert System -->
+    @if (Model.Alerts != null && Model.Alerts.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="section-header">
+                    <h5><i class="bi bi-exclamation-triangle"></i>Action Required</h5>
+                </h3>
+                @foreach (var alert in Model.Alerts.Take(3))
+                {
+                    <div class="alert-simple @(alert.Type == "danger" ? "danger" : alert.Type == "warning" ? "" : "info")">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <i class="@alert.Icon me-3"></i>
+                                <div>
+                                    <h6 class="mb-1 fw-bold">@alert.Title</h6>
+                                    <p class="mb-0">@alert.Message</p>
+                                </div>
+                            </div>
+                            <a href="@alert.ActionUrl" class="btn btn-primary btn-sm btn-modern">@alert.ActionText</a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- KPI Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="dashboard-card">
+                <div class="metric-card primary">
+                    <div class="metric-label">Total Spent</div>
+                    <div class="metric-value">$@Model.TotalSpent.ToString("N0")</div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">Paid: $@Model.ActualAmountSpent.ToString("N0")</small>
+                        @if (Model.SpendingGrowth >= 0)
+                        {
+                            <small class="text-success"><i class="bi bi-arrow-up me-1"></i>+@Model.SpendingGrowth.ToString("F1")%</small>
+                        }
+                        else
+                        {
+                            <small class="text-danger"><i class="bi bi-arrow-down me-1"></i>@Model.SpendingGrowth.ToString("F1")%</small>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="dashboard-card">
+                <div class="metric-card success">
+                    <div class="metric-label">Inventory Value</div>
+                    <div class="metric-value">$@Model.InventoryValue.ToString("N0")</div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">Potential: $@Model.PotentialSalesValue.ToString("N0")</small>
+                        <small class="text-success">@Model.ProfitMargin.ToString("F1")% Margin</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="dashboard-card">
+                <div class="metric-card warning">
+                    <div class="metric-label">Total Orders</div>
+                    <div class="metric-value">@Model.TotalOrders</div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">Avg: $@Model.AvgOrderValue.ToString("N0")</small>
+                        <small class="text-info">@Model.CompletedOrders Completed</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="dashboard-card">
+                <div class="metric-card info">
+                    <div class="metric-label">Payment Rate</div>
+                    <div class="metric-value">@Model.PaymentRate.ToString("F1")%</div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">Outstanding: $@Model.OutstandingBalance.ToString("N0")</small>
+                        <small class="text-success">@Model.PaymentReliability</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Row -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="dashboard-card">
+                <div class="metric-card primary">
+                    <div class="metric-label">Today's Activity</div>
+                    <div class="metric-value">@Model.TodaysOrders</div>
+                    <small class="text-muted">Orders ($@Model.TodaysSpending.ToString("N0"))</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="dashboard-card">
+                <div class="metric-card success">
+                    <div class="metric-label">This Week</div>
+                    <div class="metric-value">@Model.ThisWeekOrders</div>
+                    <small class="text-muted">Orders ($@Model.ThisWeekSpending.ToString("N0"))</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="dashboard-card">
+                <div class="metric-card info">
+                    <div class="metric-label">This Month</div>
+                    <div class="metric-value">@Model.MonthlyOrders</div>
+                    <small class="text-muted">Orders ($@Model.MonthlySpending.ToString("N0"))</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="dashboard-card">
+                <div class="metric-card warning">
+                    <div class="metric-label">Inventory Items</div>
+                    <div class="metric-value">@Model.UniqueProductCount</div>
+                    <small class="text-muted">@Model.TotalProductQuantity Total Units</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Overview Row -->
+    <div class="row mb-4">
+        <!-- Order Summary -->
+        <div class="col-lg-6 mb-4">
+            <div class="section-card">
+                <div class="section-header">
+                    <h5><i class="bi bi-box"></i>Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="stats-item">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Today:</strong> @Model.TodaysOrders orders
+                                <div class="text-muted">$@Model.TodaysSpending.ToString("N0")</div>
+                            </div>
+                            <div class="col-6">
+                                <strong>This Week:</strong> @Model.ThisWeekOrders orders
+                                <div class="text-muted">$@Model.ThisWeekSpending.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-item">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>This Month:</strong> @Model.MonthlyOrders orders
+                                <div class="text-muted">$@Model.MonthlySpending.ToString("N0")</div>
+                            </div>
+                            <div class="col-6">
+                                <strong>Total Orders:</strong> @Model.TotalOrders
+                                <div class="text-muted">$@Model.TotalSpent.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Summary -->
+        <div class="col-lg-6 mb-4">
+            <div class="section-card">
+                <div class="section-header">
+                    <h5><i class="bi bi-credit-card"></i>Payment Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="stats-item">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Total Due:</strong>
+                                <div class="h5 text-primary">$@Model.TotalSpent.ToString("N0")</div>
+                            </div>
+                            <div class="col-6">
+                                <strong>Amount Paid:</strong>
+                                <div class="h5 text-success">$@Model.ActualAmountSpent.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Payment Rate:</strong> @Model.PaymentRate.ToString("F1")%
+                        <div class="progress progress-modern mt-2">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: @Model.PaymentRate%"></div>
+                        </div>
+                    </div>
+                    @if (Model.OutstandingBalance > 0)
+                    {
+                        <div class="alert-simple">
+                            <small><i class="bi bi-exclamation-triangle me-1"></i>Outstanding Balance: $@Model.OutstandingBalance.ToString("N0")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Row -->
+    <div class="row mb-4">
+        <!-- Inventory Health -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Inventory Health</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-success">In Stock</span>
+                        <span class="fw-bold">@(Model.UniqueProductCount - Model.LowStockCount - Model.OutOfStockCount)</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-warning">Low Stock</span>
+                        <span class="fw-bold">@Model.LowStockCount</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-danger">Out of Stock</span>
+                        <span class="fw-bold">@Model.OutOfStockCount</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <span><strong>Total Products:</strong></span>
+                        <span class="fw-bold">@Model.UniqueProductCount</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Spending -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-tags me-2"></i>Top Categories</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TopCategories != null && Model.TopCategories.Any())
+                    {
+                        @foreach (var category in Model.TopCategories.Take(5))
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <strong>@category.CategoryName</strong>
+                                    <br><small class="text-muted">@category.OrderCount orders • @category.ProductCount products</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold">$@category.TotalSpent.ToString("N0")</div>
+                                    <div class="progress" style="width: 100px; height: 6px;">
+                                        <div class="progress-bar bg-primary" style="width: @category.SpendingPercentage%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted">No category data available yet.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Business Intelligence Row -->
+    <div class="row mb-4">
+        <!-- Top Wholesalers -->
+        <div class="col-lg-6 mb-4">
+            <div class="performance-card">
+                <h5 class="section-title">
+                    <i class="bi bi-building"></i>
+                    Top Wholesalers
+                </h5>
+                @if (Model.TopWholesalers != null && Model.TopWholesalers.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-modern mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Wholesaler</th>
+                                    <th>Orders</th>
+                                    <th>Total Spent</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var wholesaler in Model.TopWholesalers.Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@wholesaler.WholesalerName</strong>
+                                            <br><small class="text-muted">Avg: $@wholesaler.AvgOrderValue.ToString("N0")</small>
+                                        </td>
+                                        <td>@wholesaler.OrderCount</td>
+                                        <td>$@wholesaler.TotalSpent.ToString("N0")</td>
+                                        <td>
+                                            <span class="badge @(wholesaler.Status == "Active" ? "bg-success" : "bg-secondary")">
+                                                @wholesaler.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No wholesaler data available yet.</p>
+                }
+            </div>
+        </div>
+
+        <!-- Top Categories -->
+        <div class="col-lg-6 mb-4">
+            <div class="performance-card">
+                <h5 class="section-title">
+                    <i class="bi bi-tags"></i>
+                    Category Performance
+                </h5>
+                @if (Model.TopCategories != null && Model.TopCategories.Any())
+                {
+                    @foreach (var category in Model.TopCategories.Take(5))
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <strong>@category.CategoryName</strong>
+                                <br><small class="text-muted">@category.OrderCount orders • @category.ProductCount products</small>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold">$@category.TotalSpent.ToString("N0")</div>
+                                <div class="progress-modern mt-1" style="width: 100px;">
+                                    <div class="progress-bar bg-primary" style="width: @category.SpendingPercentage%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <p class="text-muted">No category data available yet.</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Reorder Recommendations -->
+    @if (Model.ReorderRecommendations != null && Model.ReorderRecommendations.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <h3 class="section-title">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Reorder Recommendations
+                </h3>
+                <div class="row">
+                    @foreach (var recommendation in Model.ReorderRecommendations.Take(6))
+                    {
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="recommendation-card">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-0">@recommendation.ProductName</h6>
+                                    <span class="badge @(recommendation.Urgency == "Critical" ? "bg-danger" : recommendation.Urgency == "High" ? "bg-warning" : "bg-info")">
+                                        @recommendation.Urgency
+                                    </span>
+                                </div>
+                                <p class="small mb-2">@recommendation.CategoryName</p>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Current Stock:</span>
+                                    <strong>@recommendation.CurrentStock</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Recommended:</span>
+                                    <strong>@recommendation.RecommendedQuantity units</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Estimated Cost:</span>
+                                    <strong>$@recommendation.EstimatedCost.ToString("N0")</strong>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Recent Orders and Quick Actions -->
+    <div class="row">
+        <!-- Recent Orders -->
+        <div class="col-lg-8 mb-4">
+            <div class="performance-card">
+                <h5 class="section-title">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Orders
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-modern mb-0">
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>Date</th>
+                                <th>Wholesaler</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var order in Model.RecentOrders)
+                            {
+                                <tr>
+                                    <td>
+                                        <a href="/Orders/Details/@order.Id" class="text-decoration-none">
+                                            #@order.Id
+                                        </a>
+                                    </td>
+                                    <td>@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                                    <td>@(order.Wholesaler?.BusinessName ?? "N/A")</td>
+                                        <td>
+                                            @switch (order.Status)
+                                            {
+                                                case DFTRK.Models.OrderStatus.Pending:
+                                                <span class="badge bg-warning">Pending</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Processing:
+                                                    <span class="badge bg-info">Processing</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Shipped:
+                                                    <span class="badge bg-primary">Shipped</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Delivered:
+                                                    <span class="badge bg-success">Delivered</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Completed:
+                                                    <span class="badge bg-success">Completed</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Cancelled:
+                                                    <span class="badge bg-danger">Cancelled</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-secondary">@order.Status</span>
+                                                    break;
+                                            }
+                                        </td>
+                                    <td>$@order.TotalAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                <div class="text-center mt-3">
+                    <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-primary">View All Orders</a>
+                </div>
+            </div>
+                        </div>
+                        
+        <!-- Quick Actions -->
+        <div class="col-lg-4 mb-4">
+            <div class="performance-card">
+                <h5 class="section-title">
+                    <i class="bi bi-lightning"></i>
+                    Quick Actions
+                </h5>
+                <div class="d-grid gap-3">
+                    <a asp-controller="Products" asp-action="Index" class="btn btn-primary">
+                        <i class="bi bi-cart-plus me-2"></i>Shop Products
+                    </a>
+                    <a asp-controller="RetailerProducts" asp-action="Index" class="btn btn-success">
+                        <i class="bi bi-box-seam me-2"></i>Manage Inventory
+                    </a>
+                    <a asp-controller="Orders" asp-action="Index" class="btn btn-info">
+                        <i class="bi bi-truck me-2"></i>Track Orders
+                    </a>
+                    <a asp-controller="Payments" asp-action="Index" class="btn btn-warning">
+                        <i class="bi bi-credit-card me-2"></i>Payments
+                    </a>
+                    <a asp-controller="Reports" asp-action="RetailerPerformance" class="btn btn-secondary">
+                        <i class="bi bi-graph-up me-2"></i>Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 
+
+<!-- No complex charts needed anymore --> 

@@ -1,0 +1,496 @@
+@model DFTRK.ViewModels.WholesalerPaymentsReportViewModel
+
+@{
+    ViewData["Title"] = "Payment & Revenue Report";
+}
+
+<style>
+    .report-card {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+    }
+
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .metric-card {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        padding: 1.5rem;
+        text-align: center;
+        border-left: 4px solid;
+        margin-bottom: 1rem;
+    }
+
+    .metric-card.primary { border-left-color: #007bff; }
+    .metric-card.success { border-left-color: #28a745; }
+    .metric-card.warning { border-left-color: #ffc107; }
+    .metric-card.danger { border-left-color: #dc3545; }
+    .metric-card.info { border-left-color: #17a2b8; }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+        color: #2c3e50;
+    }
+
+    .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+
+    .table-modern {
+        margin: 0;
+    }
+
+    .table-modern th {
+        background: #f8f9fa;
+        border: none;
+        color: #495057;
+        font-weight: 600;
+        padding: 1rem;
+    }
+
+    .table-modern td {
+        border: none;
+        padding: 1rem;
+        border-bottom: 1px solid #f1f3f4;
+    }
+
+    .progress-modern {
+        height: 8px;
+        border-radius: 10px;
+        background: #f8f9fa;
+    }
+
+    .progress-modern .progress-bar {
+        border-radius: 10px;
+    }
+
+    .badge-modern {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .section-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        padding: 1rem 1.5rem;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .section-header h5 {
+        margin: 0;
+        color: #495057;
+        font-weight: 600;
+    }
+
+    .section-header i {
+        color: #007bff;
+        margin-right: 0.5rem;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="report-card">
+        <div class="report-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">Payment & Revenue Report</h1>
+                    <p class="mb-0 opacity-75">Comprehensive payment tracking and revenue analysis</p>
+                </div>
+                <div>
+                    <span class="badge bg-light text-dark">@Model.WholesalerName</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="report-card">
+        <div class="section-header">
+            <h5><i class="fa fa-filter"></i>Filters & Date Range</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate" name="startDate" value="@Model.StartDate.ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-3">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate" name="endDate" value="@Model.EndDate.ToString("yyyy-MM-dd")">
+                </div>
+                <div class="col-md-3">
+                    <label for="retailerId" class="form-label">Retailer</label>
+                    <select class="form-select" id="retailerId" name="retailerId">
+                        <option value="">All Retailers</option>
+                        @foreach (var retailer in Model.Retailers)
+                        {
+                            <option value="@retailer.Id" selected="@(Model.RetailerId == retailer.Id)">
+                                @retailer.BusinessName
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="paymentStatus" class="form-label">Payment Status</label>
+                    <select class="form-select" id="paymentStatus" name="paymentStatus">
+                        <option value="">All Statuses</option>
+                        <option value="paid" selected="@(Model.PaymentStatus == "paid")">Fully Paid</option>
+                        <option value="partial" selected="@(Model.PaymentStatus == "partial")">Partially Paid</option>
+                        <option value="unpaid" selected="@(Model.PaymentStatus == "unpaid")">Unpaid</option>
+                        <option value="overdue" selected="@(Model.PaymentStatus == "overdue")">Overdue</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-search me-2"></i>Apply Filters
+                    </button>
+                    <a href="@Url.Action("WholesalerPayments")" class="btn btn-outline-secondary ms-2">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary KPIs -->
+    <div class="row mb-4">
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card primary">
+                <div class="metric-label">Total Orders</div>
+                <div class="metric-value">@Model.TotalOrders</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card info">
+                <div class="metric-label">Order Value</div>
+                <div class="metric-value">$@Model.TotalOrderValue.ToString("N0")</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card success">
+                <div class="metric-label">Amount Received</div>
+                <div class="metric-value">$@Model.TotalReceived.ToString("N0")</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card warning">
+                <div class="metric-label">Outstanding</div>
+                <div class="metric-value">$@Model.TotalOutstanding.ToString("N0")</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card @(Model.CollectionRate >= 80 ? "success" : Model.CollectionRate >= 60 ? "warning" : "danger")">
+                <div class="metric-label">Collection Rate</div>
+                <div class="metric-value">@Model.CollectionRate.ToString("F1")%</div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="metric-card info">
+                <div class="metric-label">Avg Days to Pay</div>
+                <div class="metric-value">@Model.AvgDaysToPayment.ToString("F0")</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Status Breakdown -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="metric-card success">
+                <div class="metric-label">Fully Paid Orders</div>
+                <div class="metric-value">@Model.FullyPaidOrders</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="metric-card warning">
+                <div class="metric-label">Partially Paid</div>
+                <div class="metric-value">@Model.PartiallyPaidOrders</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="metric-card danger">
+                <div class="metric-label">Unpaid Orders</div>
+                <div class="metric-value">@Model.UnpaidOrders</div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="metric-card danger">
+                <div class="metric-label">Overdue Orders</div>
+                <div class="metric-value">@Model.OverdueOrders</div>
+                <small class="text-muted">$@Model.OverdueAmount.ToString("N0")</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Trends and Payment Methods -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="report-card">
+                <div class="section-header">
+                    <h5><i class="fa fa-chart-line"></i>Monthly Revenue Trends</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-modern">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th class="text-center">Orders</th>
+                                    <th class="text-end">Ordered</th>
+                                    <th class="text-end">Received</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var trend in Model.MonthlyTrends)
+                                {
+                                    <tr>
+                                        <td>@DateTime.Parse($"{trend.Year}-{trend.Month}-01").ToString("MMM yyyy")</td>
+                                        <td class="text-center">@trend.OrderCount</td>
+                                        <td class="text-end">$@trend.TotalOrdered.ToString("N0")</td>
+                                        <td class="text-end text-success">$@trend.TotalReceived.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="report-card">
+                <div class="section-header">
+                    <h5><i class="fa fa-credit-card"></i>Payment Methods</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.PaymentMethods.Any())
+                    {
+                        @foreach (var method in Model.PaymentMethods)
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <strong>@method.Method</strong>
+                                    <small class="text-muted d-block">@method.Count payments</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold text-success">$@method.Amount.ToString("N0")</div>
+                                    <small class="text-muted">@method.Percentage.ToString("F1")%</small>
+                                </div>
+                            </div>
+                            <div class="progress progress-modern mb-3">
+                                <div class="progress-bar bg-primary" style="width: @method.Percentage%"></div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-3">
+                            <i class="fa fa-credit-card fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">No payment data available</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Payments and Aging Analysis -->
+    <div class="row mb-4">
+        <div class="col-lg-7">
+            <div class="report-card">
+                <div class="section-header">
+                    <h5><i class="fa fa-clock"></i>Recent Payments</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-modern">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Order #</th>
+                                    <th>Retailer</th>
+                                    <th class="text-end">Amount</th>
+                                    <th>Method</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in Model.RecentPayments)
+                                {
+                                    <tr>
+                                        <td>@payment.Payment.PaymentDate.ToString("MMM dd, yyyy")</td>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Orders", new { id = payment.Order.Id })" class="text-decoration-none">
+                                                #@payment.Order.Id
+                                            </a>
+                                        </td>
+                                        <td>@payment.Retailer?.BusinessName</td>
+                                        <td class="text-end text-success fw-bold">$@payment.Payment.Amount.ToString("N2")</td>
+                                        <td>
+                                            <span class="badge badge-modern bg-secondary">@payment.Payment.Method</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="report-card">
+                <div class="section-header">
+                    <h5><i class="fa fa-hourglass-half"></i>Aging Analysis</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.AgingAnalysis.Any())
+                    {
+                        @foreach (var aging in Model.AgingAnalysis)
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <strong>@aging.AgeRange</strong>
+                                    <small class="text-muted d-block">@aging.Count orders</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold @(aging.AgeRange.Contains("90+") ? "text-danger" : aging.AgeRange.Contains("61-90") ? "text-warning" : "text-primary")">
+                                        $@aging.Amount.ToString("N0")
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-3">
+                            <i class="fa fa-check-circle fa-2x text-success"></i>
+                            <p class="text-success mt-2">No outstanding payments!</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Orders Table -->
+    <div class="report-card">
+        <div class="section-header">
+            <h5><i class="fa fa-list"></i>Detailed Orders (@Model.Orders.Count)</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-modern">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Date</th>
+                            <th>Retailer</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Outstanding</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Payment Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in Model.Orders.Take(50))
+                        {
+                            // Get transaction for this order
+                            var transaction = order.Transaction;
+                            
+                            // Use the AmountPaid that was calculated and updated by the controller
+                            var amountPaid = transaction?.AmountPaid ?? 0;
+                            var orderTotal = order.TotalAmount;
+                            var outstanding = Math.Max(0, orderTotal - amountPaid);
+                            
+                            // Determine payment status
+                            var isFullyPaid = amountPaid >= orderTotal;
+                            var isPartiallyPaid = amountPaid > 0 && amountPaid < orderTotal;
+                            var isUnpaid = amountPaid == 0;
+                            
+                            // Check if overdue (more than 30 days since order date for unpaid/partial amounts)
+                            var isOverdue = false;
+                            if (outstanding > 0)
+                            {
+                                var daysSinceOrder = (DateTime.UtcNow - order.OrderDate).TotalDays;
+                                isOverdue = daysSinceOrder > 30;
+                            }
+
+                            <tr>
+                                <td>
+                                    <a href="@Url.Action("Details", "Orders", new { id = order.Id })" class="text-decoration-none fw-medium">
+                                        #@order.Id
+                                    </a>
+                                </td>
+                                <td>@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                                <td>@(order.Retailer?.BusinessName ?? "Unknown")</td>
+                                <td class="text-end">$@orderTotal.ToString("N2")</td>
+                                <td class="text-end text-success">$@amountPaid.ToString("N2")</td>
+                                <td class="text-end @(outstanding > 0 ? "text-warning fw-bold" : "text-muted")">
+                                    $@outstanding.ToString("N2")
+                                </td>
+                                <td class="text-center">
+                                    @switch (order.Status)
+                                    {
+                                        case DFTRK.Models.OrderStatus.Pending:
+                                            <span class="badge badge-modern bg-warning text-dark">Pending</span>
+                                            break;
+                                        case DFTRK.Models.OrderStatus.Processing:
+                                            <span class="badge badge-modern bg-info">Processing</span>
+                                            break;
+                                        case DFTRK.Models.OrderStatus.Shipped:
+                                            <span class="badge badge-modern bg-primary">Shipped</span>
+                                            break;
+                                        case DFTRK.Models.OrderStatus.Completed:
+                                            <span class="badge badge-modern bg-success">Completed</span>
+                                            break;
+                                        default:
+                                            <span class="badge badge-modern bg-secondary">@order.Status</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @if (isOverdue)
+                                    {
+                                        <span class="badge badge-modern bg-danger">Overdue</span>
+                                    }
+                                    else if (isFullyPaid)
+                                    {
+                                        <span class="badge badge-modern bg-success">Paid</span>
+                                    }
+                                    else if (isPartiallyPaid)
+                                    {
+                                        <span class="badge badge-modern bg-warning text-dark">Partial</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-modern bg-secondary">Unpaid</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.Orders.Count > 50)
+            {
+                <div class="card-footer text-center">
+                    <small class="text-muted">Showing first 50 orders of @Model.Orders.Count total</small>
+                </div>
+            }
+        </div>
+    </div>
+</div> 

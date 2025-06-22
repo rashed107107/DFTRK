@@ -1,0 +1,176 @@
+@model DFTRK.ViewModels.RetailerProductDetailsViewModel
+
+@{
+    ViewData["Title"] = Model.WholesalerProduct?.Product?.Name ?? "Product Details";
+}
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a asp-controller="Home" asp-action="Index">Home</a></li>
+                    <li class="breadcrumb-item"><a asp-action="Index">Products</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">@Model.WholesalerProduct?.Product?.Name</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-5">
+            @if (!string.IsNullOrEmpty(Model.WholesalerProduct?.Product?.ImageUrl))
+            {
+                <img src="@Model.WholesalerProduct.Product.ImageUrl" class="img-fluid rounded shadow" alt="@Model.WholesalerProduct.Product.Name" />
+            }
+            else
+            {
+                <div class="bg-light text-center p-5 rounded shadow">
+                    <i class="bi bi-box-seam" style="font-size: 8rem;"></i>
+                    <p class="mt-3">No image available</p>
+                </div>
+            }
+        </div>
+        
+        <div class="col-md-7">
+            <h1 class="mb-3">@Model.WholesalerProduct?.Product?.Name</h1>
+            
+            <div class="mb-3">
+                <span class="badge bg-primary">@Model.WholesalerProduct?.Product?.Category?.Name</span>
+                <span class="badge bg-secondary">Sold by: @Model.WholesalerProduct?.Wholesaler?.BusinessName</span>
+                @if (Model.WholesalerProduct?.StockQuantity <= 5)
+                {
+                    <span class="badge bg-warning text-dark">Low Stock: Only @Model.WholesalerProduct?.StockQuantity left!</span>
+                }
+                else
+                {
+                    <span class="badge bg-success">In Stock: @Model.WholesalerProduct?.StockQuantity available</span>
+                }
+            </div>
+            
+            <div class="mb-4">
+                <h3 class="text-primary">$@Model.WholesalerProduct?.Price.ToString("F2")</h3>
+            </div>
+            
+            <div class="mb-4">
+                <p>@Model.WholesalerProduct?.Product?.Description</p>
+            </div>
+            
+            <form asp-action="AddToCart" method="post" class="mb-4">
+                <input type="hidden" asp-for="WholesalerProduct.Id" name="id" />
+                
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-4">
+                        <label asp-for="Quantity" class="form-label">Quantity</label>
+                        <div class="input-group">
+                            <button type="button" class="btn btn-outline-secondary" id="decreaseQty">
+                                <i class="bi bi-dash"></i>
+                            </button>
+                            <input asp-for="Quantity" class="form-control text-center" min="1" max="@Model.WholesalerProduct?.StockQuantity" />
+                            <button type="button" class="btn btn-outline-secondary" id="increaseQty">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Max: @Model.WholesalerProduct?.StockQuantity</small>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid gap-2 d-md-flex">
+                            @if (Model.IsInCart)
+                            {
+                                <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                                    <i class="bi bi-cart-check"></i> Update Cart
+                                </button>
+                                <a asp-controller="Cart" asp-action="Index" class="btn btn-outline-primary btn-lg">
+                                    <i class="bi bi-cart"></i> View Cart
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                                    <i class="bi bi-cart-plus"></i> Add to Cart
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="d-flex justify-content-between">
+                <a asp-action="Index" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Products
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="productTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="specs-tab" data-bs-toggle="tab" data-bs-target="#specs" type="button" role="tab" aria-controls="specs" aria-selected="true">
+                                Specifications
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="shipping-tab" data-bs-toggle="tab" data-bs-target="#shipping" type="button" role="tab" aria-controls="shipping" aria-selected="false">
+                                Shipping
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="productTabsContent">
+                        <div class="tab-pane fade show active" id="specs" role="tabpanel" aria-labelledby="specs-tab">
+                            <dl class="row">
+                                <dt class="col-sm-3">Category</dt>
+                                <dd class="col-sm-9">@Model.WholesalerProduct?.Product?.Category?.Name</dd>
+                                <dt class="col-sm-3">Supplier</dt>
+                                <dd class="col-sm-9">@Model.WholesalerProduct?.Wholesaler?.BusinessName</dd>
+                            </dl>
+                        </div>
+                        <div class="tab-pane fade" id="shipping" role="tabpanel" aria-labelledby="shipping-tab">
+                            <p>Standard shipping typically takes 3-5 business days after order processing.</p>
+                            <p>Orders are processed within 1-2 business days.</p>
+                            <p>For any questions regarding shipping, please contact the supplier directly.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Handle quantity buttons
+            $("#increaseQty").click(function() {
+                var currentVal = parseInt($("#Quantity").val());
+                var maxVal = parseInt($("#Quantity").attr("max"));
+                if (!isNaN(currentVal) && currentVal < maxVal) {
+                    $("#Quantity").val(currentVal + 1);
+                }
+            });
+            
+            $("#decreaseQty").click(function() {
+                var currentVal = parseInt($("#Quantity").val());
+                if (!isNaN(currentVal) && currentVal > 1) {
+                    $("#Quantity").val(currentVal - 1);
+                }
+            });
+            
+            // Initialize tabs
+            var triggerTabList = [].slice.call(document.querySelectorAll('#productTabs button'))
+            triggerTabList.forEach(function (triggerEl) {
+                var tabTrigger = new bootstrap.Tab(triggerEl)
+                triggerEl.addEventListener('click', function (event) {
+                    event.preventDefault()
+                    tabTrigger.show()
+                })
+            })
+        });
+    </script>
+} 

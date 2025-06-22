@@ -1,0 +1,377 @@
+@model DFTRK.ViewModels.AdminDashboardViewModel
+
+@{
+    ViewData["Title"] = "Admin Dashboard";
+}
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>Admin Dashboard</h1>
+                <a asp-controller="Reports" asp-action="Index" class="btn btn-primary">
+                    <i class="bi bi-graph-up me-2"></i>View Reports
+                </a>
+            </div>
+            <p class="text-muted">Overview of system performance and key metrics</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Total Users</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">@Model.TotalUsers</h2>
+                        <i class="bi bi-people fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-light text-dark">@Model.TotalWholesalers Wholesalers</span>
+                        <span class="badge bg-light text-dark">@Model.TotalRetailers Retailers</span>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Users">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Total Products</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">@Model.TotalProducts</h2>
+                        <i class="bi bi-box-seam fs-1"></i>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-dark stretched-link" asp-controller="Products" asp-action="Index">View Details</a>
+                    <div class="small text-dark"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Total Orders</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">@Model.TotalOrders</h2>
+                        <i class="bi bi-cart-check fs-1"></i>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Orders" asp-action="Index">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Transaction Volume</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">$@Model.TotalRevenue.ToString("N0")</h2>
+                        <i class="bi bi-currency-dollar fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-light">Total value of all transactions</small>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Sales">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Metrics Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Actual Revenue</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">$@Model.ActualRevenue.ToString("N0")</h2>
+                        <i class="bi bi-cash-coin fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-light">@Model.CollectionRate.ToString("F1")% Collection Rate</small>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Payments">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Platform Fees</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">$@Model.PlatformFees.ToString("N2")</h2>
+                        <i class="bi bi-percent fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small>0.1% of transaction volume</small>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-dark stretched-link" asp-controller="Reports" asp-action="Financial">View Details</a>
+                    <div class="small text-dark"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Net Revenue</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">$@Model.NetRevenue.ToString("N0")</h2>
+                        <i class="bi bi-graph-up fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-light">After platform fees</small>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Financial">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Outstanding</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="display-4">$@Model.OutstandingRevenue.ToString("N0")</h2>
+                        <i class="bi bi-exclamation-triangle fs-1"></i>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-light">Pending payments</small>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" asp-controller="Payments" asp-action="Index">View Details</a>
+                    <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Financial Summary -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-calendar-day me-1"></i>
+                    Today's Performance
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <h6 class="text-muted">Orders</h6>
+                            <h3 class="text-primary">@Model.TodaysOrders</h3>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-muted">Revenue</h6>
+                            <h3 class="text-success">$@Model.TodaysRevenue.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="text-muted">Platform Fees Today</h6>
+                            <h4 class="text-warning">$@Model.TodaysPlatformFees.ToString("N2")</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-calendar-month me-1"></i>
+                    Monthly Performance
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <h6 class="text-muted">Orders</h6>
+                            <h3 class="text-primary">@Model.MonthlyOrders</h3>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-muted">Revenue</h6>
+                            <h3 class="text-success">$@Model.MonthlyRevenue.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="text-muted">Platform Fees This Month</h6>
+                            <h4 class="text-warning">$@Model.MonthlyPlatformFees.ToString("N2")</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-list-check me-1"></i>
+                        Recent Orders
+                    </div>
+                    <a asp-controller="Orders" asp-action="Index" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Date</th>
+                                    <th>Retailer</th>
+                                    <th>Wholesaler</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var order in Model.RecentOrders)
+                                {
+                                    <tr>
+                                        <td><a asp-controller="Orders" asp-action="Details" asp-route-id="@order.Id">#@order.Id</a></td>
+                                        <td>@order.OrderDate.ToShortDateString()</td>
+                                        <td>@order.Retailer?.BusinessName</td>
+                                        <td>@order.Wholesaler?.BusinessName</td>
+                                        <td>$@order.TotalAmount.ToString("F2")</td>
+                                        <td>
+                                            @switch (order.Status)
+                                            {
+                                                case DFTRK.Models.OrderStatus.Pending:
+                                                    <span class="badge bg-warning text-dark">Pending</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Processing:
+                                                    <span class="badge bg-info">Processing</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Shipped:
+                                                    <span class="badge bg-primary">Shipped</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Delivered:
+                                                    <span class="badge bg-success">Delivered</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Completed:
+                                                    <span class="badge bg-success">Completed</span>
+                                                    break;
+                                                case DFTRK.Models.OrderStatus.Cancelled:
+                                                    <span class="badge bg-danger">Cancelled</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-secondary">@order.Status</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td>
+                                            <a asp-controller="Orders" asp-action="Details" asp-route-id="@order.Id" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-people me-1"></i>
+                    User Statistics
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <p class="d-flex justify-content-between">
+                            <span><strong>Total Users:</strong></span>
+                            <span>@Model.TotalUsers</span>
+                        </p>
+                        <div class="progress mb-3" style="height: 10px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: 100%;" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <p class="d-flex justify-content-between">
+                            <span><strong>Wholesalers:</strong></span>
+                            <span>@Model.TotalWholesalers</span>
+                        </p>
+                        <div class="progress mb-3" style="height: 10px;">
+                            @{ 
+                                var wholesalerPercentage = Model.TotalUsers > 0 ? (int)((double)Model.TotalWholesalers / Model.TotalUsers * 100) : 0;
+                            }
+                            <div class="progress-bar bg-warning" role="progressbar" style="width: @wholesalerPercentage%;" aria-valuenow="@wholesalerPercentage" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <p class="d-flex justify-content-between">
+                            <span><strong>Retailers:</strong></span>
+                            <span>@Model.TotalRetailers</span>
+                        </p>
+                        <div class="progress mb-3" style="height: 10px;">
+                            @{ 
+                                var retailerPercentage = Model.TotalUsers > 0 ? (int)((double)Model.TotalRetailers / Model.TotalUsers * 100) : 0;
+                            }
+                            <div class="progress-bar bg-success" role="progressbar" style="width: @retailerPercentage%;" aria-valuenow="@retailerPercentage" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <p class="d-flex justify-content-between">
+                            <span><strong>Total Revenue:</strong></span>
+                            <span>$@Model.TotalRevenue.ToString("N2")</span>
+                        </p>
+                    </div>
+                    <hr>
+                    <a asp-controller="Reports" asp-action="Users" class="btn btn-sm btn-primary w-100">View Detailed User Report</a>
+                </div>
+            </div>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-speedometer2 me-1"></i>
+                    Quick Actions
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-controller="Categories" asp-action="Index" class="btn btn-outline-primary mb-2">
+                            <i class="bi bi-tags me-2"></i>Manage Categories
+                        </a>
+                        <a asp-controller="Products" asp-action="Index" class="btn btn-outline-success mb-2">
+                            <i class="bi bi-box-seam me-2"></i>Manage Products
+                        </a>
+                        <a asp-controller="Payments" asp-action="Index" class="btn btn-outline-info mb-2">
+                            <i class="bi bi-credit-card me-2"></i>View Payments
+                        </a>
+                        <a asp-controller="Reports" asp-action="Sales" class="btn btn-outline-warning mb-2">
+                            <i class="bi bi-graph-up me-2"></i>Sales Report
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // You can add JavaScript for any interactive charts here
+        // This is a placeholder for future chart implementation
+    </script>
+} 

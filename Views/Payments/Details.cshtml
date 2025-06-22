@@ -1,0 +1,190 @@
+@model DFTRK.ViewModels.PaymentViewModel
+
+@{
+    ViewData["Title"] = "Payment Details";
+}
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>Payment Details</h1>
+                <a asp-controller="Orders" asp-action="Details" asp-route-id="@Model.OrderId" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Order
+                </a>
+            </div>
+            <p class="text-muted">@Model.OrderReference for <strong>@Model.WholesalerName</strong></p>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-4">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show mb-4">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Payment Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-7">
+                            <div class="d-flex flex-column">
+                                <span class="text-muted">Total Amount</span>
+                                <span class="fs-4">$@Model.TotalAmount.ToString("F2")</span>
+                            </div>
+                        </div>
+                        <div class="col-5">
+                            <div class="d-flex flex-column">
+                                <span class="text-muted">Status</span>
+                                @switch (Model.Status)
+                                {
+                                    case DFTRK.Models.TransactionStatus.Pending:
+                                        <span class="badge bg-warning text-dark fs-6">Pending</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.PartiallyPaid:
+                                        <span class="badge bg-info fs-6">Partially Paid</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Completed:
+                                        <span class="badge bg-success fs-6">Paid</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Failed:
+                                        <span class="badge bg-danger fs-6">Failed</span>
+                                        break;
+                                    case DFTRK.Models.TransactionStatus.Refunded:
+                                        <span class="badge bg-secondary fs-6">Refunded</span>
+                                        break;
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress mb-4" style="height: 20px;">
+                        @{
+                            var progressPercentage = Model.TotalAmount > 0 
+                                ? (int)Math.Min(100, Math.Round((Model.AmountPaid / Model.TotalAmount) * 100)) 
+                                : 0;
+                            var progressColorClass = progressPercentage == 100 
+                                ? "bg-success" 
+                                : (progressPercentage > 0 ? "bg-info" : "bg-warning");
+                        }
+                        <div class="progress-bar @progressColorClass" role="progressbar" style="width: @progressPercentage%;" 
+                             aria-valuenow="@progressPercentage" aria-valuemin="0" aria-valuemax="100">
+                            @progressPercentage%
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="d-flex flex-column">
+                                <span class="text-muted">Amount Paid</span>
+                                <span class="text-success">$@Model.AmountPaid.ToString("F2")</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex flex-column">
+                                <span class="text-muted">Remaining</span>
+                                <span class="@(Model.RemainingAmount > 0 ? "text-danger" : "text-success")">
+                                    $@Model.RemainingAmount.ToString("F2")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (Model.Status != DFTRK.Models.TransactionStatus.Completed && 
+                         Model.Status != DFTRK.Models.TransactionStatus.Refunded &&
+                         User.IsInRole("Retailer") &&
+                         Model.OrderStatus != DFTRK.Models.OrderStatus.Cancelled)
+                    {
+                        <div class="mt-4">
+                            <a asp-action="MakePayment" asp-route-id="@Model.TransactionId" class="btn btn-primary">
+                                <i class="bi bi-credit-card me-2"></i>Make Payment
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Payment History</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.PaymentHistory == null || !Model.PaymentHistory.Any())
+                    {
+                        <div class="p-4 text-center">
+                            <p class="text-muted mb-0">No payments have been made yet.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Method</th>
+                                        <th>Reference</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var payment in Model.PaymentHistory)
+                                    {
+                                        <tr>
+                                            <td>@payment.PaymentDate.ToString("MM/dd/yyyy")</td>
+                                            <td>
+                                                @switch (payment.Method)
+                                                {
+                                                    case DFTRK.Models.PaymentMethod.CreditCard:
+                                                        <span><i class="bi bi-credit-card me-1"></i>Credit Card</span>
+                                                        break;
+                                                    case DFTRK.Models.PaymentMethod.BankTransfer:
+                                                        <span><i class="bi bi-bank me-1"></i>Bank Transfer</span>
+                                                        break;
+                                                    case DFTRK.Models.PaymentMethod.Cash:
+                                                        <span><i class="bi bi-cash me-1"></i>Cash</span>
+                                                        break;
+                                                    default:
+                                                        <span><i class="bi bi-wallet me-1"></i>Other</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@(payment.ReferenceNumber ?? "-")</td>
+                                            <td class="text-end">$@payment.Amount.ToString("F2")</td>
+                                        </tr>
+                                        @if (!string.IsNullOrEmpty(payment.Notes))
+                                        {
+                                            <tr class="table-light">
+                                                <td colspan="4">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-info-circle me-1"></i>@payment.Notes
+                                                    </small>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

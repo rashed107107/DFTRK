@@ -1,0 +1,124 @@
+@model IEnumerable<DFTRK.ViewModels.PaymentViewModel>
+
+@{
+    ViewData["Title"] = "Payments";
+}
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>Payments</h1>
+            <p class="text-muted">View and manage all your payments</p>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-4">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show mb-4">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">
+            <p class="mb-0">No payment records found.</p>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Payment Transactions</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Order</th>
+                                <th>Wholesaler</th>
+                                <th>Total Amount</th>
+                                <th>Paid</th>
+                                <th>Remaining</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var transaction in Model)
+                            {
+                                <tr>
+                                    <td>@transaction.TransactionId</td>
+                                    <td>
+                                        <a asp-controller="Orders" asp-action="Details" asp-route-id="@transaction.OrderId">
+                                            @transaction.OrderReference
+                                        </a>
+                                    </td>
+                                    <td>@transaction.WholesalerName</td>
+                                    <td>$@transaction.TotalAmount.ToString("F2")</td>
+                                    <td>$@transaction.AmountPaid.ToString("F2")</td>
+                                    <td>
+                                        <span class="@(transaction.RemainingAmount > 0 ? "text-danger" : "text-success")">
+                                            $@transaction.RemainingAmount.ToString("F2")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @switch (transaction.Status)
+                                        {
+                                            case DFTRK.Models.TransactionStatus.Pending:
+                                                <span class="badge bg-warning text-dark">Pending</span>
+                                                break;
+                                            case DFTRK.Models.TransactionStatus.PartiallyPaid:
+                                                <span class="badge bg-info">Partially Paid</span>
+                                                break;
+                                            case DFTRK.Models.TransactionStatus.Completed:
+                                                <span class="badge bg-success">Paid</span>
+                                                break;
+                                            case DFTRK.Models.TransactionStatus.Failed:
+                                                <span class="badge bg-danger">Failed</span>
+                                                break;
+                                            case DFTRK.Models.TransactionStatus.Refunded:
+                                                <span class="badge bg-secondary">Refunded</span>
+                                                break;
+                                            default:
+                                                <span class="badge bg-secondary">@transaction.Status</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a asp-action="Details" asp-route-id="@transaction.TransactionId" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            
+                                            @if (User.IsInRole("Retailer") && 
+                                                 (transaction.Status == DFTRK.Models.TransactionStatus.Pending || 
+                                                  transaction.Status == DFTRK.Models.TransactionStatus.PartiallyPaid) &&
+                                                 transaction.OrderStatus != DFTRK.Models.OrderStatus.Cancelled)
+                                            {
+                                                <a asp-action="MakePayment" asp-route-id="@transaction.TransactionId" class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-credit-card"></i>
+                                                </a>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div> 

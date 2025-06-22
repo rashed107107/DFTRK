@@ -1,0 +1,122 @@
+@model DFTRK.ViewModels.EditProfileViewModel
+
+@{
+    ViewData["Title"] = "My Profile";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Success Message -->
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    @TempData["SuccessMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-user-circle me-2"></i>My Profile
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="profile-info">
+                                <h5 class="text-primary">Business Information</h5>
+                                <hr>
+                                <div class="mb-3">
+                                    <strong>Business Name:</strong>
+                                    <p class="text-muted">@Model.BusinessName</p>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>User Type:</strong>
+                                    <span class="badge bg-info">@Model.UserType</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="profile-info">
+                                <h5 class="text-primary">Contact Information</h5>
+                                <hr>
+                                <div class="mb-3">
+                                    <strong>Email:</strong>
+                                    <p class="text-muted">@Model.Email</p>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Phone Number:</strong>
+                                    <p class="text-muted">@(Model.PhoneNumber ?? "Not provided")</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <h5 class="text-primary">Address Information</h5>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <strong>Address:</strong>
+                                    <p class="text-muted">@Model.Address</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <strong>City:</strong>
+                                    <p class="text-muted">@Model.City</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <strong>State:</strong>
+                                    <p class="text-muted">@Model.State</p>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <strong>Country:</strong>
+                                    <p class="text-muted">@Model.Country</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-3">
+                        <a href="@Url.Action("EditProfile", "Account")" class="btn btn-primary">
+                            <i class="fas fa-edit me-2"></i>Edit Profile
+                        </a>
+                        <a href="@Url.Action("ChangePassword", "Account")" class="btn btn-outline-secondary">
+                            <i class="fas fa-key me-2"></i>Change Password
+                        </a>
+                        <a href="@Url.Action("Index", "Home")" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .profile-info .mb-3:last-child {
+        margin-bottom: 0 !important;
+    }
+    
+    .card {
+        border: none;
+        border-radius: 15px;
+    }
+    
+    .card-header {
+        border-radius: 15px 15px 0 0;
+        border: none;
+    }
+    
+    .badge {
+        font-size: 0.9em;
+    }
+    
+    .btn {
+        border-radius: 8px;
+        padding: 10px 20px;
+    }
+</style> 

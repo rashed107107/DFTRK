@@ -1,0 +1,84 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome to B2B Platform</h1>
+    <p class="lead">The ultimate solution for connecting wholesalers and retailers in one seamless platform.</p>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card mb-4 shadow-sm h-100">
+            <div class="card-header bg-primary text-white text-center">
+                <h3>For Wholesalers</h3>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <p>List your products and sell directly to retailers. Manage inventory, process orders, and track transactions efficiently.</p>
+                <ul>
+                    <li>Add and manage your product catalog</li>
+                    <li>Set competitive wholesale prices</li>
+                    <li>Process retailer orders</li>
+                    <li>Track sales and revenue</li>
+                </ul>
+                <div class="mt-auto">
+                    @if (!User.Identity.IsAuthenticated)
+                    {
+                        <a asp-controller="Account" asp-action="Register" asp-route-userType="wholesaler" class="btn btn-primary w-100">Register as Wholesaler</a>
+                    }
+                    else if (User.IsInRole("Wholesaler"))
+                    {
+                        <a asp-controller="Products" asp-action="Index" class="btn btn-primary w-100">Manage Products</a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4 shadow-sm h-100">
+            <div class="card-header bg-success text-white text-center">
+                <h3>For Retailers</h3>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <p>Browse and purchase products from verified wholesalers. Manage your inventory and track orders all in one place.</p>
+                <ul>
+                    <li>Browse products from multiple wholesalers</li>
+                    <li>Purchase inventory at wholesale prices</li>
+                    <li>Track order status and history</li>
+                    <li>Manage your retail inventory</li>
+                </ul>
+                <div class="mt-auto">
+                    @if (!User.Identity.IsAuthenticated)
+                    {
+                        <a asp-controller="Account" asp-action="Register" asp-route-userType="retailer" class="btn btn-success w-100">Register as Retailer</a>
+                    }
+                    else if (User.IsInRole("Retailer"))
+                    {
+                        <a asp-controller="Products" asp-action="Index" class="btn btn-success w-100">Browse Products</a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4 shadow-sm h-100">
+            <div class="card-header bg-info text-white text-center">
+                <h3>Platform Features</h3>
+            </div>
+            <div class="card-body">
+                <ul>
+                    <li>Secure user authentication and role-based access</li>
+                    <li>Comprehensive product catalog management</li>
+                    <li>Automated inventory tracking</li>
+                    <li>Order processing and notification system</li>
+                    <li>Transaction history and reporting</li>
+                    <li>User-friendly dashboards for all user types</li>
+                </ul>
+                @if (!User.Identity.IsAuthenticated)
+                {
+                    <a asp-controller="Account" asp-action="Login" class="btn btn-info w-100 mt-4">Login</a>
+                }
+            </div>
+        </div>
+    </div>
+</div>
