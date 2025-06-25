@@ -2069,9 +2069,13 @@ namespace DFTRK.Controllers
                 ordersQuery = ordersQuery.Where(o => o.RetailerId == retailerId);
             }
 
-            var orders = await ordersQuery
-                .OrderByDescending(o => o.OrderDate)
-                .ToListAsync();
+            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
+
+            // Calculate summary metrics using actual payments like other reports
+            var totalOrders = orders.Count;
+            var totalPurchases = orders.Sum(o => o.TotalAmount);
+            var totalPaid = orders.Sum(o => o.Transaction?.Payments?.Sum(p => p.Amount) ?? 0);
+            var initialOutstanding = totalPurchases - totalPaid;
 
             // Ensure all orders have transactions - create missing ones
             foreach (var order in orders)
@@ -2285,7 +2289,7 @@ namespace DFTRK.Controllers
                 WholesalerName = user.BusinessName ?? user.UserName,
 
                 // Summary Metrics
-                TotalOrders = orders.Count,
+                TotalOrders = totalOrders,
                 TotalOrderValue = totalOrderValue,
                 TotalReceived = totalReceived,
                 TotalOutstanding = totalOutstanding,
@@ -2308,6 +2312,170 @@ namespace DFTRK.Controllers
                 RecentPayments = recentPayments,
                 AgingAnalysis = agingAnalysis
             };
+
+            return View(viewModel);
+        }
+
+        // GET: Reports/RetailerPurchases - Simple purchase report for retailers
+        [Authorize(Roles = "Retailer")]
+        public async Task<IActionResult> RetailerPurchases(DateTime? startDate, DateTime? endDate, string? supplierId = null)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            // Default to current month if no dates provided
+            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1);
+
+            // Get all orders (both wholesaler and partnership orders)
+            var ordersQuery = _context.Orders
+                .Include(o => o.Wholesaler)
+                .Include(o => o.Transaction)
+                    .ThenInclude(t => t!.Payments)
+                .Include(o => o.Items) // Include order items to get partnership info
+                .Where(o => o.RetailerId == user.Id && 
+                           o.OrderDate >= startDate && 
+                           o.OrderDate <= endDate &&
+                           o.Status != OrderStatus.Cancelled); // Exclude cancelled orders
+
+            // Apply specific supplier filter if provided
+            if (!string.IsNullOrEmpty(supplierId))
+            {
+                if (supplierId.StartsWith("wholesaler_"))
+                {
+                    var wholesalerId = supplierId.Replace("wholesaler_", "");
+                    ordersQuery = ordersQuery.Where(o => o.WholesalerId == wholesalerId);
+                }
+                else if (supplierId.StartsWith("partner_"))
+                {
+                    var partnershipId = supplierId.Replace("partner_", "");
+                    // For partner orders, filter by partnership name in the order notes
+                    // First get the partnership name by ID
+                    var partnership = await _context.RetailerPartnerships
+                        .FirstOrDefaultAsync(rp => rp.Id.ToString() == partnershipId && rp.RetailerId == user.Id);
+                    
+                    if (partnership != null)
+                    {
+                        var partnershipName = partnership.PartnershipName;
+                        ordersQuery = ordersQuery.Where(o => o.WholesalerId == null && 
+                            o.Notes != null && 
+                            o.Notes.Contains($"Partnership Order from: {partnershipName}"));
+                    }
+                }
+            }
+
+            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
+
+            // Ensure all orders have transactions - create missing ones (same pattern as WholesalerPayments)
+            foreach (var order in orders)
+            {
+                if (order.Transaction == null)
+                {
+                    var newTransaction = new Transaction
+                    {
+                        OrderId = order.Id,
+                        Amount = order.TotalAmount,
+                        AmountPaid = 0,
+                        TransactionDate = order.OrderDate,
+                        Payments = new List<Payment>()
+                    };
+                    _context.Transactions.Add(newTransaction);
+                    order.Transaction = newTransaction;
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            // Get all transactions for these orders with current payment data
+            var orderIds = orders.Select(o => o.Id).ToList();
+            var transactions = await _context.Transactions
+                .Include(t => t.Payments)
+                .Where(t => orderIds.Contains(t.OrderId))
+                .ToListAsync();
+
+            // Create lookup dictionary - handle potential duplicates by taking the first transaction per order
+            var transactionLookup = transactions
+                .GroupBy(t => t.OrderId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Update AmountPaid for all transactions first (to ensure accuracy)
+            foreach (var transaction in transactions)
+            {
+                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
+                if (transaction.AmountPaid != actualAmountPaid)
+                {
+                    transaction.AmountPaid = actualAmountPaid;
+                    _context.Update(transaction);
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            // Update the orders' Transaction objects with the corrected AmountPaid values
+            foreach (var order in orders)
+            {
+                if (transactionLookup.ContainsKey(order.Id))
+                {
+                    order.Transaction = transactionLookup[order.Id];
+                }
+            }
+
+            // Calculate summary metrics using the synchronized transaction data
+            var totalOrders = orders.Count;
+            var totalPurchases = orders.Sum(o => o.TotalAmount);
+            var totalPaid = orders.Where(o => transactionLookup.ContainsKey(o.Id))
+                                 .Sum(o => transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0);
+            var purchasesOutstanding = totalPurchases - totalPaid;
+
+            // Get wholesalers for filter dropdown
+            var wholesalers = await _context.Users.ToListAsync();
+            var wholesalerUsers = new List<ApplicationUser>();
+            foreach (var u in wholesalers)
+            {
+                var roles = await _userManager.GetRolesAsync(u);
+                if (roles.Contains("Wholesaler"))
+                {
+                    wholesalerUsers.Add(u);
+                }
+            }
+
+            // Get partnerships for filter dropdown
+            var partnerships = await _context.RetailerPartnerships
+                .Where(rp => rp.RetailerId == user.Id && rp.IsActive)
+                .ToListAsync();
+
+            // Build the simple view model
+            var viewModel = new SalesReportViewModel
+            {
+                StartDate = startDate.Value,
+                EndDate = endDate.Value,
+                RetailerId = supplierId, // Reusing this field for supplier filter
+                
+                // Summary metrics
+                TotalOrders = totalOrders,
+                TotalSales = totalPurchases,
+                ActualRevenue = totalPaid,
+                OutstandingAmount = purchasesOutstanding,
+                CollectionRate = totalPurchases > 0 ? (totalPaid / totalPurchases) * 100 : 0,
+                
+                // Orders collection - update with corrected transaction data
+                Orders = orders.Select(o => {
+                    // Update Transaction information with the latest data from our lookup
+                    if (transactionLookup.ContainsKey(o.Id))
+                    {
+                        o.Transaction = transactionLookup[o.Id];
+                    }
+                    return o;
+                }).ToList(),
+                
+                // For filter dropdowns
+                Wholesalers = wholesalerUsers,
+                Retailers = partnerships.Select(p => new ApplicationUser { Id = p.Id.ToString(), BusinessName = p.WholesalerName }).ToList()
+            };
+
+            // Pass filter values to view
+            ViewBag.SupplierId = supplierId;
 
             return View(viewModel);
         }

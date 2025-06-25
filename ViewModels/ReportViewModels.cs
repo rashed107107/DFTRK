@@ -573,4 +573,88 @@ namespace DFTRK.ViewModels
         public int Count { get; set; }
         public decimal Amount { get; set; }
     }
+
+    // Retailer Purchase Report ViewModels
+    public class RetailerPurchaseReportViewModel : BaseReportViewModel
+    {
+        // Filter properties
+        public string? SupplierId { get; set; }
+        public string? SupplierType { get; set; } // "Wholesaler" or "Partner"
+        
+        // Summary metrics
+        public int TotalOrders { get; set; }
+        public decimal TotalPurchases { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal TotalOutstanding { get; set; }
+        public decimal PaymentRate { get; set; }
+        public int TotalItems { get; set; }
+        public int WholesalerOrderCount { get; set; }
+        public int PartnerOrderCount { get; set; }
+        public decimal WholesalerPurchases { get; set; }
+        public decimal PartnerPurchases { get; set; }
+        
+        // Data collections
+        public List<SupplierPurchaseSummary> SupplierSummaries { get; set; } = new List<SupplierPurchaseSummary>();
+        public List<PurchaseOrderDetail> AllOrders { get; set; } = new List<PurchaseOrderDetail>();
+        public List<ApplicationUser> Wholesalers { get; set; } = new List<ApplicationUser>();
+        public List<RetailerPartnership> Partners { get; set; } = new List<RetailerPartnership>();
+        
+        // Charts data
+        public List<ChartDataPoint> PurchasesBySupplierChart { get; set; } = new List<ChartDataPoint>();
+        public List<ChartDataPoint> PurchasesByTypeChart { get; set; } = new List<ChartDataPoint>();
+        public List<ChartDataPoint> MonthlyPurchasesChart { get; set; } = new List<ChartDataPoint>();
+        public List<ChartDataPoint> PaymentStatusChart { get; set; } = new List<ChartDataPoint>();
+    }
+
+    public class SupplierPurchaseSummary
+    {
+        public string SupplierId { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string SupplierType { get; set; } = string.Empty; // "Wholesaler" or "Partner"
+        public int OrderCount { get; set; }
+        public decimal TotalPurchases { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public decimal PaymentRate { get; set; }
+        public int TotalItems { get; set; }
+        public DateTime LastOrderDate { get; set; }
+        public decimal AvgOrderValue { get; set; }
+        public List<PurchaseOrderDetail> Orders { get; set; } = new List<PurchaseOrderDetail>();
+    }
+
+    public class PurchaseOrderDetail
+    {
+        public int OrderId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string SupplierId { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string SupplierType { get; set; } = string.Empty; // "Wholesaler" or "Partner"
+        public OrderStatus Status { get; set; }
+        public decimal OrderTotal { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public TransactionStatus PaymentStatus { get; set; }
+        public int ItemCount { get; set; }
+        public List<PurchaseItemDetail> Items { get; set; } = new List<PurchaseItemDetail>();
+        public List<PaymentDetail> Payments { get; set; } = new List<PaymentDetail>();
+    }
+
+    public class PurchaseItemDetail
+    {
+        public string ProductName { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Subtotal { get; set; }
+        public bool IsPartnershipProduct { get; set; }
+    }
+
+    public class PaymentDetail
+    {
+        public int PaymentId { get; set; }
+        public DateTime PaymentDate { get; set; }
+        public decimal Amount { get; set; }
+        public PaymentMethod Method { get; set; }
+        public string Reference { get; set; } = string.Empty;
+    }
 } 
