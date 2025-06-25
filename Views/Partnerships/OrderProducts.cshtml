@@ -1,0 +1,197 @@
+@model DFTRK.ViewModels.ProductOrderViewModel
+
+@{
+    ViewData["Title"] = "Order Products";
+}
+
+<div class="container-fluid">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Order Products</h4>
+                    <p class="mb-0 small">Partnership: @Model.Partnership.PartnershipName</p>
+                    <p class="mb-0 small">From: @Model.Partnership.WholesalerName</p>
+                </div>
+                <div class="text-end">
+                    <h5 class="mb-0" id="total-amount">Total: $0.00</h5>
+                    <small>Selected items</small>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (!Model.WholesalerProducts.Any())
+            {
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No products available for ordering from this partner at the moment.
+                </div>
+                <div class="text-center">
+                    <a asp-action="Details" asp-route-id="@Model.Partnership.Id" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                    </a>
+                </div>
+            }
+            else
+            {
+                <form asp-action="PlaceOrder" method="post" id="order-form">
+                    <input type="hidden" name="Partnership.Id" value="@Model.Partnership.Id" />
+                    
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" id="product-search" placeholder="Search products...">
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="products-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Available Stock</th>
+                                    <th>Quantity to Order</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < Model.WholesalerProducts.Count; i++)
+                                {
+                                    var product = Model.WholesalerProducts[i];
+                                    <tr class="product-row" data-product-id="@product.Id" data-price="@product.Price">
+                                        <td>
+                                            <div>
+                                                <strong>@product.Product?.Name</strong>
+                                                @if (!string.IsNullOrEmpty(product.Product?.Description))
+                                                {
+                                                    <br><small class="text-muted">@product.Product?.Description</small>
+                                                }
+                                                @if (!string.IsNullOrEmpty(product.Product?.SKU))
+                                                {
+                                                    <br><small class="text-primary">SKU: @product.Product?.SKU</small>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>@product.Product?.Category?.Name</td>
+                                        <td class="fw-bold">$@product.Price.ToString("F2")</td>
+                                        <td>
+                                            @if (product.StockQuantity <= 10)
+                                            {
+                                                <span class="badge bg-warning">@product.StockQuantity</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">@product.StockQuantity</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <input type="hidden" name="OrderItems[@i].ProductId" value="@product.Id" />
+                                            <input type="number" 
+                                                   name="OrderItems[@i].Quantity" 
+                                                   class="form-control quantity-input" 
+                                                   min="0" 
+                                                   max="@product.StockQuantity" 
+                                                   value="0" 
+                                                   style="width: 100px;" />
+                                        </td>
+                                        <td class="subtotal fw-bold">$0.00</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-8">
+                            <div class="alert alert-info" role="alert">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Note:</strong> Orders will be sent to your partner for processing. Stock will be reserved once the order is confirmed.
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>Order Summary</h5>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Items:</span>
+                                        <span id="item-count">0</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Total:</span>
+                                        <span id="order-total" class="fw-bold">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a asp-action="Details" asp-route-id="@Model.Partnership.Id" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                        </a>
+                        <div>
+                            <a asp-action="Index" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-list me-1"></i>All Partnerships
+                            </a>
+                            <button type="submit" class="btn btn-success" id="place-order-btn" disabled>
+                                <i class="fas fa-shopping-cart me-1"></i>Place Order
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Update totals when quantity changes
+            $('.quantity-input').on('input', function() {
+                updateRowSubtotal($(this));
+                updateOrderTotal();
+            });
+
+            // Search functionality
+            $('#product-search').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#products-table tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+                });
+            });
+
+            function updateRowSubtotal($input) {
+                var $row = $input.closest('tr');
+                var price = parseFloat($row.data('price'));
+                var quantity = parseInt($input.val()) || 0;
+                var subtotal = price * quantity;
+                
+                $row.find('.subtotal').text('$' + subtotal.toFixed(2));
+            }
+
+            function updateOrderTotal() {
+                var total = 0;
+                var itemCount = 0;
+                
+                $('.quantity-input').each(function() {
+                    var quantity = parseInt($(this).val()) || 0;
+                    if (quantity > 0) {
+                        var price = parseFloat($(this).closest('tr').data('price'));
+                        total += price * quantity;
+                        itemCount++;
+                    }
+                });
+                
+                $('#order-total').text('$' + total.toFixed(2));
+                $('#total-amount').text('Total: $' + total.toFixed(2));
+                $('#item-count').text(itemCount);
+                
+                // Enable/disable place order button
+                $('#place-order-btn').prop('disabled', total === 0);
+            }
+        });
+    </script>
+} 

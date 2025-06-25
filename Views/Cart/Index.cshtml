@@ -78,11 +78,11 @@
                                                 </div>
                                             </td>
                                             <td class="text-center">
-                                                <form asp-action="UpdateQuantity" method="post" class="d-inline">
+                                                <form asp-action="UpdateQuantity" method="post" class="d-inline quantity-form">
                                                     <input type="hidden" name="id" value="@item.Id" />
                                                     <div class="input-group input-group-sm" style="width: 120px;">
                                                         <button class="btn btn-outline-secondary" type="submit" name="action" value="decrease">-</button>
-                                                        <input type="text" name="quantity" value="@item.Quantity" class="form-control text-center" />
+                                                        <input type="number" name="quantity" value="@item.Quantity" class="form-control text-center quantity-input" min="1" max="999" onchange="this.form.submit()" />
                                                         <button class="btn btn-outline-secondary" type="submit" name="action" value="increase">+</button>
                                                     </div>
                                                 </form>

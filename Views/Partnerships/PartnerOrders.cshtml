@@ -1,0 +1,237 @@
+@model DFTRK.ViewModels.PartnerOrderIndexViewModel
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+
+@{
+    ViewData["Title"] = "Partnership Orders";
+}
+
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Partners</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.PartnershipId">@Model.PartnershipName</a></li>
+            <li class="breadcrumb-item active">Orders</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Orders for @Model.PartnershipName</h1>
+            <p class="text-muted mb-0">Manage your orders with this partner</p>
+        </div>
+        <div class="btn-group">
+            <a asp-action="CreateOrder" asp-route-id="@Model.PartnershipId" class="btn btn-success">
+                <i class="fas fa-shopping-cart me-1"></i>Create New Order
+            </a>
+            <a asp-action="Details" asp-route-id="@Model.PartnershipId" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>Order History (@Model.Orders.Count)
+            </h5>
+        </div>
+        <div class="card-body">
+            @if (!Model.Orders.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No orders yet</h5>
+                    <p class="text-muted">Create your first order with this partner to get started.</p>
+                    <a asp-action="CreateOrder" asp-route-id="@Model.PartnershipId" class="btn btn-success">
+                        <i class="fas fa-shopping-cart me-1"></i>Create Order
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Order #</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Total Amount</th>
+                                <th>Payment Status</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var order in Model.Orders)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold">#@order.Id.ToString("D6")</span>
+                                    </td>
+                                    <td>@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                                    <td>
+                                        @switch (order.Status)
+                                        {
+                                            case OrderStatus.Pending:
+                                                <span class="badge bg-warning text-dark">Pending</span>
+                                                break;
+                                            case OrderStatus.Processing:
+                                                <span class="badge bg-info">Processing</span>
+                                                break;
+                                            case OrderStatus.Shipped:
+                                                <span class="badge bg-primary">Shipped</span>
+                                                break;
+                                            case OrderStatus.Delivered:
+                                                <span class="badge bg-success">Delivered</span>
+                                                break;
+                                            case OrderStatus.Cancelled:
+                                                <span class="badge bg-danger">Cancelled</span>
+                                                break;
+                                            default:
+                                                <span class="badge bg-secondary">@order.Status</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">$@order.TotalAmount.ToString("F2")</span>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var orderTransaction = await ViewContext.HttpContext.RequestServices
+                                                .GetService<DFTRK.Data.ApplicationDbContext>()
+                                                .Transactions.FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                                        }
+                                        @if (orderTransaction != null)
+                                        {
+                                            @if (orderTransaction.AmountPaid >= orderTransaction.Amount)
+                                            {
+                                                <span class="badge bg-success">Paid</span>
+                                            }
+                                            else if (orderTransaction.AmountPaid > 0)
+                                            {
+                                                <span class="badge bg-warning text-dark">Partially Paid</span>
+                                                <br><small>$@orderTransaction.AmountPaid.ToString("F2") / $@orderTransaction.Amount.ToString("F2")</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">Pending Payment</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">No Transaction</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(order.Notes))
+                                        {
+                                            <span class="text-truncate d-inline-block" style="max-width: 200px;" title="@order.Notes">@order.Notes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No notes</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="OrderDetails" asp-route-id="@order.Id" class="btn btn-outline-primary">
+                                                <i class="fas fa-eye me-1"></i>View
+                                            </a>
+                                            @if (order.Status != OrderStatus.Cancelled)
+                                            {
+                                                var transaction = await ViewContext.HttpContext.RequestServices
+                                                    .GetService<DFTRK.Data.ApplicationDbContext>()
+                                                    .Transactions.FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                                                
+                                                @if (transaction != null && transaction.AmountPaid < transaction.Amount)
+                                                {
+                                                    <a asp-controller="Payments" asp-action="Details" asp-route-id="@transaction.Id" class="btn btn-warning">
+                                                        <i class="fas fa-credit-card me-1"></i>Pay Order
+                                                    </a>
+                                                }
+                                                else if (transaction != null && transaction.AmountPaid >= transaction.Amount)
+                                                {
+                                                    <span class="btn btn-success btn-sm" disabled>
+                                                        <i class="fas fa-check me-1"></i>Paid
+                                                    </span>
+                                                }
+                                            }
+                                            @if (order.Status == OrderStatus.Shipped)
+                                            {
+                                                <a asp-controller="Orders" asp-action="ConfirmDelivery" asp-route-id="@order.Id" class="btn btn-outline-success">
+                                                    <i class="fas fa-check me-1"></i>Confirm Delivery
+                                                </a>
+                                            }
+                                            @if (order.Status == OrderStatus.Delivered)
+                                            {
+                                                <a asp-controller="Orders" asp-action="Complete" asp-route-id="@order.Id" class="btn btn-outline-success">
+                                                    <i class="fas fa-check-double me-1"></i>Complete
+                                                </a>
+                                            }
+                                            @if (order.Status == OrderStatus.Pending)
+                                            {
+                                                <button type="button" class="btn btn-outline-danger" 
+                                                        onclick="cancelOrder(@order.Id)">
+                                                    <i class="fas fa-times me-1"></i>Cancel
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Order Summary -->
+                <div class="row mt-4">
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="mb-0">@Model.Orders.Count</h5>
+                                <p class="mb-0 text-muted">Total Orders</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="mb-0">@Model.Orders.Count(o => o.Status == OrderStatus.Pending)</h5>
+                                <p class="mb-0 text-muted">Pending</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="mb-0">@Model.Orders.Count(o => o.Status == OrderStatus.Delivered)</h5>
+                                <p class="mb-0 text-muted">Delivered</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="mb-0">$@Model.Orders.Where(o => o.Status != OrderStatus.Cancelled).Sum(o => o.TotalAmount).ToString("N0")</h5>
+                                <p class="mb-0 text-muted">Total Value</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function cancelOrder(orderId) {
+            showCancelConfirmation('order', function() {
+                // Use GET request since Cancel action expects GET
+                window.location.href = '@Url.Action("Cancel", "Orders")?id=' + orderId;
+            });
+        }
+    </script>
+} 

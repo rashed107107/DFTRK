@@ -75,11 +75,12 @@ namespace DFTRK.Controllers
         // POST: Cart/Update
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateQuantity(int id, int quantity, string action)
+        public async Task<IActionResult> UpdateQuantity(int id, int quantity, string? action)
         {
             if (quantity < 1)
             {
-                return BadRequest("Quantity must be at least 1");
+                TempData["Error"] = "Quantity must be at least 1";
+                return RedirectToAction(nameof(Index));
             }
 
             var user = await _userManager.GetUserAsync(User);
@@ -91,6 +92,7 @@ namespace DFTRK.Controllers
             var cartItem = await _context.CartItems
                 .Include(ci => ci.Cart)
                 .Include(ci => ci.WholesalerProduct)
+                .ThenInclude(wp => wp.Product)
                 .FirstOrDefaultAsync(ci => ci.Id == id && ci.Cart.RetailerId == user.Id);
 
             if (cartItem == null)
@@ -98,32 +100,40 @@ namespace DFTRK.Controllers
                 return NotFound();
             }
 
+            int newQuantity = cartItem.Quantity;
+
             if (action == "increase")
             {
-                cartItem.Quantity += 1;
+                newQuantity = cartItem.Quantity + 1;
             }
             else if (action == "decrease")
             {
-                if (cartItem.Quantity > 1)
-                {
-                    cartItem.Quantity -= 1;
-                }
+                newQuantity = Math.Max(1, cartItem.Quantity - 1);
             }
             else
             {
-                // Direct quantity update
-                cartItem.Quantity = quantity;
+                // Direct quantity update (when user types in the input field)
+                newQuantity = quantity;
             }
 
             // Check if we have enough stock
-            if (cartItem.Quantity > cartItem.WholesalerProduct.StockQuantity)
+            if (newQuantity > cartItem.WholesalerProduct.StockQuantity)
             {
-                cartItem.Quantity = cartItem.WholesalerProduct.StockQuantity;
-                TempData["WarningMessage"] = "Quantity adjusted to match available stock.";
+                newQuantity = cartItem.WholesalerProduct.StockQuantity;
+                TempData["Warning"] = $"Quantity adjusted to {newQuantity} to match available stock for {cartItem.WholesalerProduct.Product?.Name}.";
             }
 
+            // Ensure quantity is at least 1
+            newQuantity = Math.Max(1, newQuantity);
+
+            cartItem.Quantity = newQuantity;
             _context.Update(cartItem);
             await _context.SaveChangesAsync();
+
+            if (action == null)
+            {
+                TempData["Success"] = "Quantity updated successfully.";
+            }
 
             return RedirectToAction(nameof(Index));
         }

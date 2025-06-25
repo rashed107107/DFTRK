@@ -34,8 +34,26 @@ namespace DFTRK.ViewModels
         public decimal SellingPrice { get; set; }
         public int StockQuantity { get; set; }
         public string? Notes { get; set; }
+        public string? PartnershipProductName { get; set; } // For partnership products without WholesalerProduct
+        public string? PartnershipCategoryName { get; set; } // Category name for partnership products
+        public string? PartnershipSupplierName { get; set; } // Partner/supplier name for partnership products
 
         public decimal ProfitMargin => 
             PurchasePrice > 0 ? Math.Round((SellingPrice - PurchasePrice) / PurchasePrice * 100, 2) : 0;
+
+        // Helper property to get the display name
+        public string ProductDisplayName => 
+            WholesalerProduct?.Product?.Name ?? PartnershipProductName ?? "Unknown Product";
+
+        // Helper property to check if this is a partnership product
+        public bool IsPartnershipProduct => !string.IsNullOrEmpty(PartnershipProductName) && WholesalerProduct == null;
+
+        // Helper property to get the category name
+        public string CategoryDisplayName => 
+            WholesalerProduct?.Product?.Category?.Name ?? PartnershipCategoryName ?? "Unknown Category";
+
+        // Helper property to get the supplier name
+        public string SupplierDisplayName => 
+            WholesalerProduct?.Wholesaler?.BusinessName ?? PartnershipSupplierName ?? "Unknown Supplier";
     }
 } 

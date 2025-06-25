@@ -1,0 +1,174 @@
+@model DFTRK.ViewModels.PartnershipDetailsViewModel
+
+@{
+    ViewData["Title"] = $"Partnership: {Model.Partnership.PartnershipName}";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a asp-action="Index" class="text-decoration-none">Partnerships</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">@Model.Partnership.PartnershipName</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-1">@Model.Partnership.PartnershipName</h1>
+            <p class="text-muted">Partnership with @Model.Partnership.WholesalerName</p>
+        </div>
+        <div class="btn-group">
+            <a asp-action="Index" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Partnerships
+            </a>
+            <a asp-action="Edit" asp-route-id="@Model.Partnership.Id" class="btn btn-outline-primary">
+                <i class="fas fa-edit me-1"></i>Edit Partnership
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-0">@Model.TotalCategories</h4>
+                    <p class="mb-0">Categories</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h4 class="mb-0">@Model.TotalProducts</h4>
+                    <p class="mb-0">Products</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h4 class="mb-0">@(Model.Products?.Where(p => p.IsActive && p.Category != null).Select(p => p.Category).Distinct().Count() ?? 0)</h4>
+                    <p class="mb-0">Active Categories</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Categories Section -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Categories (@Model.TotalCategories)</h5>
+            <a asp-action="CreateCategory" asp-route-partnershipId="@Model.Partnership.Id" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i>Add Category
+            </a>
+        </div>
+        <div class="card-body">
+            @if (!Model.Categories.Any())
+            {
+                <p class="text-muted text-center">No categories yet. Add your first category to get started.</p>
+            }
+            else
+            {
+                <div class="row">
+                    @foreach (var category in Model.Categories)
+                    {
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6>@category.Name</h6>
+                                            <p class="text-muted small">@category.Description</p>
+                                            <span class="badge bg-info">@(category.Products?.Count(p => p.IsActive) ?? 0) products</span>
+                                        </div>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="EditCategory" asp-route-id="@category.Id" class="btn btn-outline-primary btn-sm">
+                                                <i class="fas fa-edit me-1"></i>Edit
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                    onclick="showDeleteConfirmation('category', function() { 
+                                                        document.getElementById('deleteForm@(category.Id)').submit(); 
+                                                    });">
+                                                <i class="fas fa-trash me-1"></i>Delete
+                                            </button>
+                                            <form id="deleteForm@(category.Id)" asp-action="DeleteCategory" asp-route-id="@category.Id" method="post" style="display: none;">
+                                                @Html.AntiForgeryToken()
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Products Section -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Products (@Model.TotalProducts)</h5>
+            <div class="btn-group">
+                <a asp-action="CreateProduct" asp-route-partnershipId="@Model.Partnership.Id" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus me-1"></i>Add Product
+                </a>
+                <a asp-action="CreateOrder" asp-route-id="@Model.Partnership.Id" class="btn btn-success btn-sm">
+                    <i class="fas fa-shopping-cart me-1"></i>Create Order
+                </a>
+                <a asp-action="PartnerOrders" asp-route-id="@Model.Partnership.Id" class="btn btn-outline-info btn-sm">
+                    <i class="fas fa-list me-1"></i>View Orders
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (!Model.Products.Any())
+            {
+                <p class="text-muted text-center">No products yet. Add your first product to get started.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Cost</th>
+                                <th>Selling Price</th>
+
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in Model.Products)
+                            {
+                                <tr>
+                                    <td>@product.Name</td>
+                                    <td>@product.Category?.Name</td>
+                                    <td>$@product.CostPrice.ToString("F2")</td>
+                                    <td>$@product.SellingPrice.ToString("F2")</td>
+
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="EditProduct" asp-route-id="@product.Id" class="btn btn-outline-primary">Edit</a>
+                                            <a asp-action="DeleteProduct" asp-route-id="@product.Id" class="btn btn-outline-danger">Delete</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Category management functionality ready
+        console.log('Partnership details page loaded with category management');
+    </script>
+} 

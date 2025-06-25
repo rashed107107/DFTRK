@@ -1,0 +1,364 @@
+@model DFTRK.ViewModels.PartnerOrderDetailsViewModel
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+
+@{
+    ViewData["Title"] = $"Order #{Model.Order.Id:D6}";
+}
+
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Partners</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.Partnership.Id">@Model.Partnership.PartnershipName</a></li>
+            <li class="breadcrumb-item"><a asp-action="PartnerOrders" asp-route-id="@Model.Partnership.Id">Orders</a></li>
+            <li class="breadcrumb-item active">Order #@Model.Order.Id.ToString("D6")</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Order Information -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-receipt me-2"></i>Order #@Model.Order.Id.ToString("D6")
+                        </h5>
+                        <div>
+                            @switch (Model.Order.Status)
+                            {
+                                case OrderStatus.Pending:
+                                    <span class="badge bg-warning text-dark fs-6">Pending</span>
+                                    break;
+                                case OrderStatus.Processing:
+                                    <span class="badge bg-info fs-6">Processing</span>
+                                    break;
+                                case OrderStatus.Shipped:
+                                    <span class="badge bg-primary fs-6">Shipped</span>
+                                    break;
+                                case OrderStatus.Delivered:
+                                    <span class="badge bg-success fs-6">Delivered</span>
+                                    break;
+                                case OrderStatus.Cancelled:
+                                    <span class="badge bg-danger fs-6">Cancelled</span>
+                                    break;
+                                default:
+                                    <span class="badge bg-secondary fs-6">@Model.Order.Status</span>
+                                    break;
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Order Items -->
+                    <h6 class="mb-3">Order Items</h6>
+                    @if (Model.OrderItems.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                        <th>Unit Price</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in Model.OrderItems)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(item.ProductName))
+                                                {
+                                                    <span>@item.ProductName</span>
+                                                    <br><small class="text-muted">Partnership Product</small>
+                                                }
+                                                else
+                                                {
+                                                    <span>Product #@item.WholesalerProductId</span>
+                                                }
+                                            </td>
+                                            <td>@item.Quantity</td>
+                                            <td>$@item.UnitPrice.ToString("F2")</td>
+                                            <td>$@item.Subtotal.ToString("F2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="3" class="text-end">Total Amount:</th>
+                                        <th>$@Model.TotalAmount.ToString("F2")</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No items found for this order.</p>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.Order.Notes))
+                    {
+                        <div class="mt-4">
+                            <h6>Order Notes</h6>
+                            <div class="alert alert-light">
+                                @Model.Order.Notes
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Summary & Actions -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Order Summary</h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-5">Order Date:</dt>
+                        <dd class="col-sm-7">@Model.Order.OrderDate.ToString("MMM dd, yyyy")</dd>
+
+                        <dt class="col-sm-5">Partner:</dt>
+                        <dd class="col-sm-7">@Model.Partnership.PartnershipName</dd>
+
+                        <dt class="col-sm-5">Order Type:</dt>
+                        <dd class="col-sm-7">
+                            @if (Model.Order.WholesalerId == null)
+                            {
+                                <span class="badge bg-info">Partnership Order</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-primary">Wholesaler Order</span>
+                            }
+                        </dd>
+
+                        <dt class="col-sm-5">Items:</dt>
+                        <dd class="col-sm-7">@Model.OrderItems.Sum(i => i.Quantity) items</dd>
+
+                        <dt class="col-sm-5">Status:</dt>
+                        <dd class="col-sm-7">
+                            @switch (Model.Order.Status)
+                            {
+                                case OrderStatus.Pending:
+                                    <span class="badge bg-warning text-dark">Pending</span>
+                                    break;
+                                case OrderStatus.Processing:
+                                    <span class="badge bg-info">Processing</span>
+                                    break;
+                                case OrderStatus.Shipped:
+                                    <span class="badge bg-primary">Shipped</span>
+                                    break;
+                                case OrderStatus.Delivered:
+                                    <span class="badge bg-success">Delivered</span>
+                                    break;
+                                case OrderStatus.Cancelled:
+                                    <span class="badge bg-danger">Cancelled</span>
+                                    break;
+                                default:
+                                    <span class="badge bg-secondary">@Model.Order.Status</span>
+                                    break;
+                            }
+                        </dd>
+
+                        <dt class="col-sm-5">Total:</dt>
+                        <dd class="col-sm-7"><strong class="text-success">$@Model.TotalAmount.ToString("F2")</strong></dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (Model.Order.Status == OrderStatus.Pending)
+                        {
+                            <form asp-action="ProcessOrder" method="post" class="mb-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Order.Id" />
+                                <button type="submit" class="btn btn-info w-100">
+                                    <i class="fas fa-cogs me-1"></i>Process Order
+                                </button>
+                            </form>
+                            
+                            <a href="#" class="btn btn-outline-danger w-100"
+                               onclick="showCancelConfirmation('order', function() { window.location.href = '@Url.Action("Cancel", "Orders", new { id = Model.Order.Id })'; }); return false;">
+                                <i class="fas fa-times me-1"></i>Cancel Order
+                            </a>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Processing)
+                        {
+                            <form asp-action="ShipOrder" method="post" class="mb-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Order.Id" />
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-shipping-fast me-1"></i>Mark as Shipped
+                                </button>
+                            </form>
+                        }
+                        
+                        @{
+                            var transaction = await ViewContext.HttpContext.RequestServices
+                                .GetService<DFTRK.Data.ApplicationDbContext>()
+                                .Transactions.FirstOrDefaultAsync(t => t.OrderId == Model.Order.Id);
+                        }
+                        @if (transaction != null && transaction.AmountPaid < transaction.Amount && Model.Order.Status != OrderStatus.Cancelled)
+                        {
+                            <a asp-controller="Payments" asp-action="Details" asp-route-id="@transaction.Id" class="btn btn-warning w-100">
+                                <i class="fas fa-credit-card me-1"></i>Pay Order ($@((transaction.Amount - transaction.AmountPaid).ToString("F2")))
+                            </a>
+                        }
+                        else if (transaction != null && transaction.AmountPaid >= transaction.Amount)
+                        {
+                            <button type="button" class="btn btn-success w-100" disabled>
+                                <i class="fas fa-check me-1"></i>Order Fully Paid
+                            </button>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Shipped)
+                        {
+                            <a asp-controller="Orders" asp-action="ConfirmDelivery" asp-route-id="@Model.Order.Id" class="btn btn-success w-100">
+                                <i class="fas fa-check me-1"></i>Confirm Delivery
+                            </a>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Delivered)
+                        {
+                            <a asp-controller="Orders" asp-action="Complete" asp-route-id="@Model.Order.Id" class="btn btn-success w-100">
+                                <i class="fas fa-check-circle me-1"></i>Complete Order
+                            </a>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Completed)
+                        {
+                            <button type="button" class="btn btn-outline-success w-100" disabled>
+                                <i class="fas fa-check me-1"></i>Order Completed
+                            </button>
+                        }
+
+                        <a asp-action="PartnerOrders" asp-route-id="@Model.Partnership.Id" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Timeline -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Order Timeline</h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item @(Model.Order.Status == OrderStatus.Pending || Model.Order.Status == OrderStatus.Processing || Model.Order.Status == OrderStatus.Shipped || Model.Order.Status == OrderStatus.Delivered ? "active" : "")">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <p class="mb-0"><strong>Order Placed</strong></p>
+                                <small class="text-muted">@Model.Order.OrderDate.ToString("MMM dd, yyyy HH:mm")</small>
+                            </div>
+                        </div>
+                        
+                        @if (Model.Order.Status != OrderStatus.Cancelled && (Model.Order.Status == OrderStatus.Processing || Model.Order.Status == OrderStatus.Shipped || Model.Order.Status == OrderStatus.Delivered))
+                        {
+                            <div class="timeline-item active">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <p class="mb-0"><strong>Processing</strong></p>
+                                    <small class="text-muted">Partner is preparing your order</small>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Shipped || Model.Order.Status == OrderStatus.Delivered)
+                        {
+                            <div class="timeline-item active">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <p class="mb-0"><strong>Shipped</strong></p>
+                                    <small class="text-muted">Order is on its way</small>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Delivered)
+                        {
+                            <div class="timeline-item active">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <p class="mb-0"><strong>Delivered</strong></p>
+                                    <small class="text-muted">Order completed successfully</small>
+                                </div>
+                            </div>
+                        }
+                        
+                        @if (Model.Order.Status == OrderStatus.Cancelled)
+                        {
+                            <div class="timeline-item cancelled">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <p class="mb-0"><strong>Cancelled</strong></p>
+                                    <small class="text-muted">Order was cancelled</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 20px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 9px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -15px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #dee2e6;
+        border: 2px solid #fff;
+    }
+    
+    .timeline-item.active .timeline-marker {
+        background: #28a745;
+    }
+    
+    .timeline-item.cancelled .timeline-marker {
+        background: #dc3545;
+    }
+    
+    .timeline-content {
+        margin-left: 10px;
+    }
+</style> 

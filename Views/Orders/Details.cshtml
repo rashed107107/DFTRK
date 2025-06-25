@@ -39,7 +39,15 @@
                                         <tr>
                                             <td>
                                                 <div>
-                                                    <h6 class="mb-0">@item.WholesalerProduct.Product.Name</h6>
+                                                    @if (item.WholesalerProduct != null)
+                                                    {
+                                                        <h6 class="mb-0">@item.WholesalerProduct.Product.Name</h6>
+                                                    }
+                                                    else
+                                                    {
+                                                        <h6 class="mb-0">@item.ProductName</h6>
+                                                        <small class="text-muted">Partnership Product</small>
+                                                    }
                                                 </div>
                                             </td>
                                             <td class="text-center">@item.Quantity</td>
@@ -101,8 +109,33 @@
 
                         @if (isAdmin || isRetailer)
                         {
-                            <dt class="col-sm-5">Wholesaler:</dt>
-                            <dd class="col-sm-7">@Model.Wholesaler?.BusinessName</dd>
+                            <dt class="col-sm-5">
+                                @if (Model.WholesalerId == null)
+                                {
+                                    <text>Partner:</text>
+                                }
+                                else
+                                {
+                                    <text>Wholesaler:</text>
+                                }
+                            </dt>
+                            <dd class="col-sm-7">
+                                @if (Model.WholesalerId == null)
+                                {
+                                    @if (!string.IsNullOrEmpty(Model.Notes) && Model.Notes.StartsWith("Partnership Order from: "))
+                                    {
+                                        @Model.Notes.Substring("Partnership Order from: ".Length).Split('\n')[0]
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Partnership Order</span>
+                                    }
+                                }
+                                else
+                                {
+                                    @Model.Wholesaler?.BusinessName
+                                }
+                            </dd>
                         }
 
                         @if (isAdmin || isWholesaler)
@@ -139,7 +172,13 @@
                             }
                             @if (isRetailer && Model.Status == DFTRK.Models.OrderStatus.Pending)
                             {
-                                <a asp-action="Cancel" asp-route-id="@Model.Id" class="btn btn-danger">Cancel Order</a>
+                                <a href="#" class="btn btn-danger"
+                                   onclick="showCancelConfirmation('order', function() { window.location.href = '@Url.Action("Cancel", new { id = Model.Id })'; }); return false;">Cancel Order</a>
+                            }
+                            @if (isWholesaler && (Model.Status == DFTRK.Models.OrderStatus.Pending || Model.Status == DFTRK.Models.OrderStatus.Processing))
+                            {
+                                <a href="#" class="btn btn-danger" 
+                                   onclick="showCancelConfirmation('order', function() { window.location.href = '@Url.Action("CancelByWholesaler", new { id = Model.Id })'; }); return false;">Cancel Order</a>
                             }
                         </div>
                     </div>

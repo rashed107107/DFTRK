@@ -1,0 +1,191 @@
+@model DFTRK.ViewModels.PartnerOrderCreateViewModel
+
+@{
+    ViewData["Title"] = "Create Order";
+}
+
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Partners</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.PartnershipId">@Model.PartnershipName</a></li>
+            <li class="breadcrumb-item active">Create Order</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-shopping-cart me-2"></i>Create Order from @Model.WholesalerName
+                    </h4>
+                </div>
+                <div class="card-body">
+                    @if (!Model.AvailableProducts.Any())
+                    {
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>No products available!</strong> Please add products to this partnership before creating an order.
+                        </div>
+                        <a asp-action="Details" asp-route-id="@Model.PartnershipId" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                        </a>
+                    }
+                    else
+                    {
+                        <form asp-action="CreateOrder" method="post" id="orderForm">
+                            <div asp-validation-summary="All" class="alert alert-danger"></div>
+                            <input type="hidden" asp-for="PartnershipId" />
+                            <input type="hidden" asp-for="PartnershipName" />
+                            <input type="hidden" asp-for="WholesalerName" />
+
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Select</th>
+                                            <th>Product</th>
+                                            <th>Category</th>
+                                            <th>Purchase Price</th>
+                
+                                            <th>Quantity</th>
+                                            <th>Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (int i = 0; i < Model.OrderItems.Count; i++)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <input type="hidden" asp-for="OrderItems[i].ProductId" />
+                                                    <input type="hidden" asp-for="OrderItems[i].ProductName" />
+                                                    <input type="hidden" asp-for="OrderItems[i].PurchasePrice" />
+                    
+                                                    
+                                                    <div class="form-check">
+                                                        <input asp-for="OrderItems[i].IsSelected" class="form-check-input order-item-select" 
+                                                               onchange="updateRowState(this)" />
+                                                    </div>
+                                                </td>
+                                                <td>@Model.OrderItems[i].ProductName</td>
+                                                <td>@Model.AvailableProducts.FirstOrDefault(p => p.Id == Model.OrderItems[i].ProductId)?.Category?.Name</td>
+                                                <td>$@Model.OrderItems[i].PurchasePrice.ToString("F2")</td>
+                
+                                                <td>
+                                                    <input asp-for="OrderItems[i].Quantity" 
+                                                           class="form-control quantity-input" 
+                                                           type="number" 
+                                                           min="0" 
+              
+                                                           onchange="updateSubtotal(this, @Model.OrderItems[i].PurchasePrice)" 
+                                                           disabled />
+                                                </td>
+                                                <td>
+                                                    <span class="subtotal fw-bold">$0.00</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label asp-for="Notes" class="form-label">Order Notes</label>
+                                        <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Optional notes for this order..."></textarea>
+                                        <span asp-validation-for="Notes" class="text-danger"></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6>Order Summary</h6>
+                                            <p class="mb-2">Selected Items: <span id="selectedCount">0</span></p>
+                                            <p class="mb-2">Total Quantity: <span id="totalQuantity">0</span></p>
+                                            <h5 class="mb-0">Total: <span id="grandTotal">$0.00</span></h5>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <a asp-action="Details" asp-route-id="@Model.PartnershipId" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                                </a>
+                                <button type="submit" class="btn btn-success" id="submitBtn" disabled>
+                                    <i class="fas fa-shopping-cart me-1"></i>Create Order
+                                </button>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        function updateRowState(checkbox) {
+            const row = checkbox.closest('tr');
+            const quantityInput = row.querySelector('.quantity-input');
+            
+            if (checkbox.checked) {
+                quantityInput.disabled = false;
+                quantityInput.min = 1;
+                if (quantityInput.value == 0) {
+                    quantityInput.value = 1;
+                }
+            } else {
+                quantityInput.disabled = true;
+                quantityInput.min = 0;
+                quantityInput.value = 0;
+                const subtotalSpan = row.querySelector('.subtotal');
+                subtotalSpan.textContent = '$0.00';
+            }
+            
+            updateSubtotal(quantityInput, parseFloat(quantityInput.previousElementSibling.value) || 0);
+            updateOrderSummary();
+        }
+
+        function updateSubtotal(input, price) {
+            const quantity = parseInt(input.value) || 0;
+            const subtotal = quantity * price;
+            const subtotalSpan = input.closest('tr').querySelector('.subtotal');
+            subtotalSpan.textContent = '$' + subtotal.toFixed(2);
+            updateOrderSummary();
+        }
+
+        function updateOrderSummary() {
+            let selectedCount = 0;
+            let totalQuantity = 0;
+            let grandTotal = 0;
+
+            document.querySelectorAll('.order-item-select:checked').forEach(checkbox => {
+                selectedCount++;
+                const row = checkbox.closest('tr');
+                const quantity = parseInt(row.querySelector('.quantity-input').value) || 0;
+                const subtotalText = row.querySelector('.subtotal').textContent;
+                const subtotal = parseFloat(subtotalText.replace('$', '')) || 0;
+                
+                totalQuantity += quantity;
+                grandTotal += subtotal;
+            });
+
+            document.getElementById('selectedCount').textContent = selectedCount;
+            document.getElementById('totalQuantity').textContent = totalQuantity;
+            document.getElementById('grandTotal').textContent = '$' + grandTotal.toFixed(2);
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = selectedCount === 0 || totalQuantity === 0;
+        }
+
+        // Initialize the form
+        document.addEventListener('DOMContentLoaded', function() {
+            updateOrderSummary();
+        });
+    </script>
+} 

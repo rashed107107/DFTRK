@@ -4,6 +4,7 @@ using DFTRK.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DFTRK.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250624034927_RemoveWholesalerReference")]
+    partial class RemoveWholesalerReference
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -211,6 +214,7 @@ namespace DFTRK.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("WholesalerId")
+                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
@@ -233,12 +237,6 @@ namespace DFTRK.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("PartnerProductId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProductName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -248,7 +246,7 @@ namespace DFTRK.Migrations
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("WholesalerProductId")
+                    b.Property<int>("WholesalerProductId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -492,7 +490,7 @@ namespace DFTRK.Migrations
                     b.Property<int>("StockQuantity")
                         .HasColumnType("int");
 
-                    b.Property<int?>("WholesalerProductId")
+                    b.Property<int>("WholesalerProductId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -772,7 +770,8 @@ namespace DFTRK.Migrations
                     b.HasOne("DFTRK.Models.ApplicationUser", "Wholesaler")
                         .WithMany()
                         .HasForeignKey("WholesalerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Retailer");
 
@@ -790,7 +789,8 @@ namespace DFTRK.Migrations
                     b.HasOne("DFTRK.Models.WholesalerProduct", "WholesalerProduct")
                         .WithMany("OrderItems")
                         .HasForeignKey("WholesalerProductId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Order");
 
@@ -871,7 +871,8 @@ namespace DFTRK.Migrations
                     b.HasOne("DFTRK.Models.WholesalerProduct", "WholesalerProduct")
                         .WithMany()
                         .HasForeignKey("WholesalerProductId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Retailer");
 

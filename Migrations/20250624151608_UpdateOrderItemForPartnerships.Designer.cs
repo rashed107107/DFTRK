@@ -4,6 +4,7 @@ using DFTRK.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DFTRK.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250624151608_UpdateOrderItemForPartnerships")]
+    partial class UpdateOrderItemForPartnerships
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -492,7 +495,7 @@ namespace DFTRK.Migrations
                     b.Property<int>("StockQuantity")
                         .HasColumnType("int");
 
-                    b.Property<int?>("WholesalerProductId")
+                    b.Property<int>("WholesalerProductId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -871,7 +874,8 @@ namespace DFTRK.Migrations
                     b.HasOne("DFTRK.Models.WholesalerProduct", "WholesalerProduct")
                         .WithMany()
                         .HasForeignKey("WholesalerProductId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Retailer");
 

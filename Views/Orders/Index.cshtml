@@ -72,7 +72,25 @@
                                 }
                                 @if (isAdmin || isRetailer)
                                 {
-                                    <td>@order.Wholesaler?.BusinessName</td>
+                                    <td>
+                                        @if (order.Wholesaler?.BusinessName != null)
+                                        {
+                                            @order.Wholesaler.BusinessName
+                                        }
+                                        else if (order.WholesalerId == null && order.Notes != null && order.Notes.StartsWith("Partnership Order from: "))
+                                        {
+                                            var partnershipName = order.Notes.Substring("Partnership Order from: ".Length).Split('\n')[0];
+                                            <span class="badge bg-info me-1">Partnership</span>@partnershipName
+                                        }
+                                        else if (!string.IsNullOrEmpty(order.WholesalerId))
+                                        {
+                                            <span class="badge bg-info me-1">Partnership</span>@order.WholesalerId
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unknown</span>
+                                        }
+                                    </td>
                                 }
                                 <td class="text-end">$@order.TotalAmount.ToString("F2")</td>
                                 <td>
@@ -117,31 +135,39 @@
                                             </a>
                                         }
                                         
-                                        @if (isRetailer && order.Status == DFTRK.Models.OrderStatus.Shipped)
+                                        @* Partnership Order Actions - Simple: Pending or Complete *@
+                                        @if (isRetailer && order.WholesalerId == null && order.Status != DFTRK.Models.OrderStatus.Completed && order.Status != DFTRK.Models.OrderStatus.Cancelled)
                                         {
-                                            <a asp-action="ConfirmDelivery" asp-route-id="@order.Id" 
-                                               class="btn btn-sm btn-outline-info" 
-                                               onclick="return confirm('Confirm delivery of this order?')" 
+                                            <a href="#" class="btn btn-sm btn-outline-success" 
+                                               onclick="showCompletionConfirmation('order', function() { window.location.href = '@Url.Action("CompletePartnershipOrder", new { id = order.Id })'; }); return false;"
+                                               title="Complete Partnership Order">
+                                                <i class="bi bi-check-circle"></i> Complete
+                                            </a>
+                                        }
+                                        
+                                        @* Regular Order Actions - Keep existing workflow *@
+                                        @if (isRetailer && order.WholesalerId != null && order.Status == DFTRK.Models.OrderStatus.Shipped)
+                                        {
+                                            <a href="#" class="btn btn-sm btn-outline-info" 
+                                               onclick="showCompletionConfirmation('delivery', function() { window.location.href = '@Url.Action("ConfirmDelivery", new { id = order.Id })'; }); return false;" 
                                                title="Confirm Delivery">
                                                 <i class="bi bi-box-seam"></i>
                                             </a>
                                         }
                                         
-                                        @if (isRetailer && order.Status == DFTRK.Models.OrderStatus.Delivered)
+                                        @if (isRetailer && order.WholesalerId != null && order.Status == DFTRK.Models.OrderStatus.Delivered)
                                         {
-                                            <a asp-action="Complete" asp-route-id="@order.Id" 
-                                               class="btn btn-sm btn-outline-success" 
-                                               onclick="return confirm('Mark this order as complete?')"
+                                            <a href="#" class="btn btn-sm btn-outline-success" 
+                                               onclick="showCompletionConfirmation('order', function() { window.location.href = '@Url.Action("Complete", new { id = order.Id })'; }); return false;"
                                                title="Complete Order">
                                                 <i class="bi bi-check-circle"></i>
                                             </a>
                                         }
                                         
-                                        @if (isRetailer && order.Status == DFTRK.Models.OrderStatus.Pending)
+                                        @if (isRetailer && order.Status == DFTRK.Models.OrderStatus.Pending && order.WholesalerId != null)
                                         {
-                                            <a asp-action="Cancel" asp-route-id="@order.Id" 
-                                               class="btn btn-sm btn-outline-danger" 
-                                               onclick="return confirm('Are you sure you want to cancel this order?')"
+                                            <a href="#" class="btn btn-sm btn-outline-danger" 
+                                               onclick="showCancelConfirmation('order', function() { window.location.href = '@Url.Action("Cancel", new { id = order.Id })'; }); return false;"
                                                title="Cancel Order">
                                                 <i class="bi bi-x-circle"></i>
                                             </a>

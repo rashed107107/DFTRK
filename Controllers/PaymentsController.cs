@@ -47,9 +47,19 @@ namespace DFTRK.Controllers
                 return RedirectToAction("AccessDenied", "Account");
             }
 
-            // Get wholesaler name
-            var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
-            var wholesalerName = wholesaler?.BusinessName ?? "Unknown";
+            // Get wholesaler name - handle both regular and partnership orders
+            string wholesalerName;
+            if (transaction.PaymentMethod == "Partnership Order")
+            {
+                // For partnership orders, WholesalerId contains the partnership name
+                wholesalerName = transaction.WholesalerId;
+            }
+            else
+            {
+                // For regular orders, WholesalerId is a user ID
+                var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
+                wholesalerName = wholesaler?.BusinessName ?? "Unknown";
+            }
 
             var viewModel = new PaymentViewModel
             {
@@ -102,9 +112,19 @@ namespace DFTRK.Controllers
                 return RedirectToAction("Details", new { id = transaction.Id });
             }
 
-            // Get wholesaler name
-            var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
-            var wholesalerName = wholesaler?.BusinessName ?? "Unknown";
+            // Get wholesaler name - handle both regular and partnership orders
+            string wholesalerName;
+            if (transaction.PaymentMethod == "Partnership Order")
+            {
+                // For partnership orders, WholesalerId contains the partnership name
+                wholesalerName = transaction.WholesalerId;
+            }
+            else
+            {
+                // For regular orders, WholesalerId is a user ID
+                var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
+                wholesalerName = wholesaler?.BusinessName ?? "Unknown";
+            }
 
             var viewModel = new MakePaymentViewModel
             {
@@ -245,16 +265,26 @@ namespace DFTRK.Controllers
 
             foreach (var transaction in transactions)
             {
-                // Get retailer and wholesaler names
-                var retailer = await _userManager.FindByIdAsync(transaction.RetailerId);
-                var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
+                // Get wholesaler name - handle both regular and partnership orders
+                string wholesalerName;
+                if (transaction.PaymentMethod == "Partnership Order")
+                {
+                    // For partnership orders, WholesalerId contains the partnership name
+                    wholesalerName = transaction.WholesalerId;
+                }
+                else
+                {
+                    // For regular orders, WholesalerId is a user ID
+                    var wholesaler = await _userManager.FindByIdAsync(transaction.WholesalerId);
+                    wholesalerName = wholesaler?.BusinessName ?? "Unknown";
+                }
                 
                 viewModels.Add(new PaymentViewModel
                 {
                     TransactionId = transaction.Id,
                     OrderId = transaction.OrderId,
                     OrderReference = $"Order #{transaction.OrderId}",
-                    WholesalerName = wholesaler?.BusinessName ?? "Unknown",
+                    WholesalerName = wholesalerName,
                     TotalAmount = transaction.Amount,
                     AmountPaid = transaction.AmountPaid,
                     RemainingAmount = transaction.Amount - transaction.AmountPaid,

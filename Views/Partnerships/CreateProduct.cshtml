@@ -1,0 +1,96 @@
+@model DFTRK.ViewModels.ProductCreateViewModel
+
+@{
+    ViewData["Title"] = "Add Product";
+}
+
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index" class="text-decoration-none">Partnerships</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.PartnershipId" class="text-decoration-none">@Model.PartnershipName</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Add Product</li>
+        </ol>
+    </nav>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-box me-2"></i>Add Product</h4>
+                    <p class="mb-0 small">Partnership: @Model.PartnershipName</p>
+                </div>
+                <div class="card-body">
+                    <form asp-action="CreateProduct" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="PartnershipId" />
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="Name" class="form-label fw-bold">Product Name</label>
+                                    <input asp-for="Name" class="form-control" placeholder="Enter product name" />
+                                    <span asp-validation-for="Name" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="CategoryId" class="form-label fw-bold">Category</label>
+                                    <select asp-for="CategoryId" asp-items="Model.CategoriesList" class="form-select">
+                                        <option value="">Select a category</option>
+                                    </select>
+                                    <span asp-validation-for="CategoryId" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="PurchasePrice" class="form-label fw-bold">Purchase Price</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input asp-for="PurchasePrice" class="form-control" step="0.01" placeholder="0.00" />
+                                    </div>
+                                    <span asp-validation-for="PurchasePrice" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label fw-bold">Description</label>
+                            <textarea asp-for="Description" class="form-control" rows="3" placeholder="Enter product description"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="alert alert-info" role="alert">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Tip:</strong> Purchase price is what you pay your partner for this product.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="Details" asp-route-id="@Model.PartnershipId" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                            </a>
+                            <div>
+                                <a asp-action="Index" class="btn btn-outline-primary me-2">
+                                    <i class="fas fa-list me-1"></i>All Partnerships
+                                </a>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i>Create Product
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+} 

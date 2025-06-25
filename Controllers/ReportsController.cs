@@ -1597,14 +1597,14 @@ namespace DFTRK.Controllers
             var wholesalerProductIds = wholesalerProducts.Select(wp => wp.Id).ToList();
             var orderItemsInPeriod = await _context.OrderItems
                 .Include(oi => oi.Order)
-                .Where(oi => wholesalerProductIds.Contains(oi.WholesalerProductId) &&
+                .Where(oi => oi.WholesalerProductId.HasValue && wholesalerProductIds.Contains(oi.WholesalerProductId.Value) &&
                            oi.Order.OrderDate >= startDate && 
                            oi.Order.OrderDate <= endDate)
                 .ToListAsync();
 
             // Group order items by WholesalerProductId for analysis
             var orderItemsByProduct = orderItemsInPeriod
-                .GroupBy(oi => oi.WholesalerProductId)
+                .GroupBy(oi => oi.WholesalerProductId.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var productAnalysis = wholesalerProducts
@@ -1973,14 +1973,14 @@ namespace DFTRK.Controllers
             var productIds = wholesalerProducts.Select(wp => wp.Id).ToList();
             var orderItems = await _context.OrderItems
                 .Include(oi => oi.Order)
-                .Where(oi => productIds.Contains(oi.WholesalerProductId) &&
+                .Where(oi => oi.WholesalerProductId.HasValue && productIds.Contains(oi.WholesalerProductId.Value) &&
                            oi.Order.OrderDate >= startDate &&
                            oi.Order.OrderDate <= endDate &&
                            oi.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
                 .ToListAsync();
 
             var orderItemsByProduct = orderItems
-                .GroupBy(oi => oi.WholesalerProductId)
+                .GroupBy(oi => oi.WholesalerProductId.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             return wholesalerProducts

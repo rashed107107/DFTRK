@@ -10,7 +10,7 @@ namespace DFTRK.Models
         public string RetailerId { get; set; } = string.Empty;
         public ApplicationUser? Retailer { get; set; }
         
-        public string WholesalerId { get; set; } = string.Empty;
+        public string? WholesalerId { get; set; }
         public ApplicationUser? Wholesaler { get; set; }
         
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;

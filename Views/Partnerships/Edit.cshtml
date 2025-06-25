@@ -1,0 +1,65 @@
+@model DFTRK.ViewModels.PartnershipEditViewModel
+
+@{
+    ViewData["Title"] = "Edit Partnership";
+}
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Partnership</h4>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="Id" />
+                        
+                        <div class="mb-3">
+                            <label asp-for="PartnershipName" class="form-label fw-bold">Partnership Name</label>
+                            <input asp-for="PartnershipName" class="form-control" placeholder="Enter partnership name" />
+                            <span asp-validation-for="PartnershipName" class="text-danger"></span>
+                        </div>
+
+
+
+                        <div class="mb-3">
+                            <label asp-for="Notes" class="form-label fw-bold">Notes</label>
+                            <textarea asp-for="Notes" class="form-control" rows="4" placeholder="Add any partnership notes or terms..."></textarea>
+                            <span asp-validation-for="Notes" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                                <label asp-for="IsActive" class="form-check-label fw-bold">
+                                    Active Partnership
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">Inactive partnerships will not be available for ordering.</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Details
+                            </a>
+                            <div>
+                                <a asp-action="Index" class="btn btn-outline-primary me-2">
+                                    <i class="fas fa-list me-1"></i>All Partnerships
+                                </a>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i>Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+} 

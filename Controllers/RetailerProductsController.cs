@@ -43,12 +43,15 @@ namespace DFTRK.Controllers
                     .Where(rp => rp.RetailerId == user.Id)
                     .ToListAsync();
 
-                // Group products by WholesalerProductId and aggregate their quantities
-                var groupedProducts = retailerProducts
+                var groupedProducts = new List<RetailerProductViewModel>();
+
+                // Handle regular wholesaler products (with WholesalerProductId)
+                var wholesalerProducts = retailerProducts.Where(rp => rp.WholesalerProductId.HasValue);
+                var groupedWholesalerProducts = wholesalerProducts
                     .GroupBy(rp => rp.WholesalerProductId)
                     .Select(group => new RetailerProductViewModel
                     {
-                        Id = group.First().Id, // Use the first ID for reference
+                        Id = group.First().Id,
                         WholesalerProduct = group.First().WholesalerProduct,
                         PurchasePrice = group.First().PurchasePrice,
                         SellingPrice = group.First().SellingPrice,
@@ -56,8 +59,42 @@ namespace DFTRK.Controllers
                         Notes = string.Join(", ", group.Where(rp => !string.IsNullOrEmpty(rp.Notes))
                                                      .Select(rp => rp.Notes)
                                                      .Distinct())
-                    })
-                    .ToList();
+                    });
+                groupedProducts.AddRange(groupedWholesalerProducts);
+
+                // Handle partnership products (without WholesalerProductId)
+                var partnershipProducts = retailerProducts.Where(rp => !rp.WholesalerProductId.HasValue);
+                var groupedPartnershipProducts = new List<RetailerProductViewModel>();
+                
+                foreach (var rp in partnershipProducts)
+                {
+                    // Extract PartnerProductId from Notes to get full partnership information
+                    var partnerProductId = ExtractPartnerProductIdFromNotes(rp.Notes);
+                    RetailerPartnerProduct? partnerProduct = null;
+                    
+                    if (partnerProductId.HasValue)
+                    {
+                        partnerProduct = await _context.RetailerPartnerProducts
+                            .Include(pp => pp.Category)
+                            .Include(pp => pp.Partnership)
+                            .FirstOrDefaultAsync(pp => pp.Id == partnerProductId.Value);
+                    }
+                    
+                    groupedPartnershipProducts.Add(new RetailerProductViewModel
+                    {
+                        Id = rp.Id,
+                        WholesalerProduct = null, // No wholesaler product for partnerships
+                        PurchasePrice = rp.PurchasePrice,
+                        SellingPrice = rp.SellingPrice,
+                        StockQuantity = rp.StockQuantity,
+                        Notes = rp.Notes,
+                        PartnershipProductName = ExtractProductNameFromNotes(rp.Notes),
+                        PartnershipCategoryName = partnerProduct?.Category?.Name,
+                        PartnershipSupplierName = partnerProduct?.Partnership?.WholesalerName ?? partnerProduct?.Partnership?.PartnershipName
+                    });
+                }
+                
+                groupedProducts.AddRange(groupedPartnershipProducts);
 
                 return View(groupedProducts);
             }
@@ -68,6 +105,64 @@ namespace DFTRK.Controllers
                 // Return empty list in case of error
                 return View(new List<RetailerProductViewModel>());
             }
+        }
+
+        private string ExtractProductNameFromNotes(string notes)
+        {
+            if (string.IsNullOrEmpty(notes))
+                return "Unknown Partnership Product";
+
+            // Extract product name from notes like "Partnership product: ProductName - ..."
+            var prefix = "Partnership product: ";
+            if (notes.StartsWith(prefix))
+            {
+                var start = prefix.Length;
+                var end = notes.IndexOf(" - ", start);
+                if (end > start)
+                {
+                    return notes.Substring(start, end - start);
+                }
+                else
+                {
+                    // If no " - " found, take everything after the prefix
+                    return notes.Substring(start);
+                }
+            }
+
+            return notes; // Return full notes if format doesn't match
+        }
+
+        private int? ExtractPartnerProductIdFromNotes(string notes)
+        {
+            if (string.IsNullOrEmpty(notes))
+                return null;
+
+            // Look for pattern like "Added from order #39" or "Last updated from order #39"
+            var orderPattern = "order #";
+            var orderIndex = notes.LastIndexOf(orderPattern);
+            if (orderIndex == -1)
+                return null;
+
+            var orderStart = orderIndex + orderPattern.Length;
+            var orderEnd = orderStart;
+            while (orderEnd < notes.Length && char.IsDigit(notes[orderEnd]))
+            {
+                orderEnd++;
+            }
+
+            if (orderEnd > orderStart && int.TryParse(notes.Substring(orderStart, orderEnd - orderStart), out var orderId))
+            {
+                // Find the OrderItem that created this product
+                var orderItem = _context.OrderItems
+                    .FirstOrDefault(oi => oi.OrderId == orderId && 
+                                         oi.PartnerProductId.HasValue && 
+                                         !string.IsNullOrEmpty(oi.ProductName) &&
+                                         notes.Contains(oi.ProductName));
+                
+                return orderItem?.PartnerProductId;
+            }
+
+            return null;
         }
 
         // GET: RetailerProducts/Details/5
@@ -308,7 +403,7 @@ namespace DFTRK.Controllers
                             var retailerProduct = new RetailerProduct
                             {
                                 RetailerId = user.Id,
-                                WholesalerProductId = orderItem.WholesalerProductId,
+                                WholesalerProductId = orderItem.WholesalerProductId, // Now nullable, can be null for partnership orders
                                 PurchasePrice = orderItem.UnitPrice,
                                 SellingPrice = orderItem.UnitPrice * 1.3m, // Default 30% markup
                                 StockQuantity = orderItem.Quantity,

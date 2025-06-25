@@ -1,0 +1,73 @@
+@model DFTRK.ViewModels.CategoryEditViewModel
+
+@{
+    ViewData["Title"] = "Edit Category";
+}
+
+<div class="container-fluid">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index" class="text-decoration-none">Partnerships</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.PartnershipId" class="text-decoration-none">@Model.PartnershipName</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit Category</li>
+        </ol>
+    </nav>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Category</h4>
+                    <p class="mb-0 small">Partnership: @Model.PartnershipName</p>
+                </div>
+                <div class="card-body">
+                    <form asp-action="EditCategory" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="Id" />
+                        <input type="hidden" asp-for="PartnershipId" />
+                        
+                        <div class="mb-3">
+                            <label asp-for="Name" class="form-label fw-bold">Category Name</label>
+                            <input asp-for="Name" class="form-control" placeholder="Enter category name" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label fw-bold">Description</label>
+                            <textarea asp-for="Description" class="form-control" rows="3" placeholder="Enter category description (optional)"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                                <label asp-for="IsActive" class="form-check-label fw-bold">
+                                    Active Category
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">Inactive categories will not be available for new products.</small>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="Details" asp-route-id="@Model.PartnershipId" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Partnership
+                            </a>
+                            <div>
+                                <a asp-action="Index" class="btn btn-outline-primary me-2">
+                                    <i class="fas fa-list me-1"></i>All Partnerships
+                                </a>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i>Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+} 

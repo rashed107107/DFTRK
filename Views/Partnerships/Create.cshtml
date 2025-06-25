@@ -1,0 +1,73 @@
+@model DFTRK.ViewModels.PartnershipCreateViewModel
+
+@{
+    ViewData["Title"] = "Add New Partner";
+}
+
+<div class="container">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-action="Index">Partners</a></li>
+            <li class="breadcrumb-item active">Add New Partner</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-handshake me-2"></i>Add New Partnership
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post">
+                        <div asp-validation-summary="All" class="alert alert-danger d-none"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="PartnershipName" class="form-label"></label>
+                            <input asp-for="PartnershipName" class="form-control" placeholder="Enter a name for this partnership" />
+                            <span asp-validation-for="PartnershipName" class="text-danger"></span>
+                            <div class="form-text">Give this partnership a meaningful name (e.g., "ABC Wholesale Partnership")</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Notes" class="form-label"></label>
+                            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Optional notes about this partnership..."></textarea>
+                            <span asp-validation-for="Notes" class="text-danger"></span>
+                            <div class="form-text">Add any additional information about this partnership</div>
+                        </div>
+
+                        <div class="border-top pt-3">
+                            <div class="d-flex justify-content-between">
+                                <a asp-action="Index" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-1"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i>Create Partnership
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle me-2 text-info"></i>What happens next?
+                    </h6>
+                    <ul class="mb-0">
+                        <li>After creating this partnership, you'll be able to add categories specific to this partner</li>
+                                                    <li>You can then add products under each category with your own pricing</li>
+                        <li>This allows you to maintain separate catalogs for each of your wholesale partners</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+} 

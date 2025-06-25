@@ -5,7 +5,7 @@ namespace DFTRK.Models
         public int Id { get; set; }
         
         // Foreign keys
-        public int WholesalerProductId { get; set; }
+        public int? WholesalerProductId { get; set; }
         public string RetailerId { get; set; } = string.Empty;
         
         public decimal PurchasePrice { get; set; }

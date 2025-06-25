@@ -6,7 +6,11 @@ namespace DFTRK.Models
         
         // Foreign keys
         public int OrderId { get; set; }
-        public int WholesalerProductId { get; set; }
+        public int? WholesalerProductId { get; set; }
+        
+        // Partnership product information (for when WholesalerProductId is null)
+        public int? PartnerProductId { get; set; }
+        public string? ProductName { get; set; }
         
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }

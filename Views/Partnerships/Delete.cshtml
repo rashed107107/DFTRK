@@ -1,0 +1,112 @@
+@model DFTRK.Models.RetailerPartnership
+
+@{
+    ViewData["Title"] = "Delete Partnership";
+}
+
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Delete Partnership</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning!</strong> Are you sure you want to delete this partnership?
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Partnership Name:</h6>
+                            <p class="fw-bold">@Model.PartnershipName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Wholesaler:</h6>
+                            <p class="fw-bold">@Model.WholesalerName</p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Created Date:</h6>
+                            <p>@Model.CreatedDate.ToString("MMMM dd, yyyy")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Status:</h6>
+                            <p>
+                                @if (Model.IsActive)
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inactive</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.Notes))
+                    {
+                        <div class="mb-4">
+                            <h6 class="text-muted">Notes:</h6>
+                            <p class="text-muted">@Model.Notes</p>
+                        </div>
+                    }
+
+                    <!-- Impact Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-warning text-dark">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@(Model.Categories?.Count ?? 0)</h5>
+                                    <p class="mb-0 small">Categories will be deleted</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">@(Model.Products?.Count ?? 0)</h5>
+                                    <p class="mb-0 small">Products will be deleted</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <h5 class="mb-0">$@((Model.Products?.Sum(p => p.SellingPrice) ?? 0).ToString("N0"))</h5>
+                                    <p class="mb-0 small">Total inventory value</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This action cannot be undone. All associated categories, products, and inventory data will be permanently deleted.
+                    </div>
+
+                    <form asp-action="Delete" method="post">
+                        <input type="hidden" asp-for="Id" />
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Cancel
+                            </a>
+                            <div>
+                                <a asp-action="Index" class="btn btn-outline-primary me-2">
+                                    <i class="fas fa-list me-1"></i>All Partnerships
+                                </a>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-trash me-1"></i>Delete Partnership
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 
