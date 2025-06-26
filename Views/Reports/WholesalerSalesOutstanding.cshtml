@@ -1,0 +1,203 @@
+@model DFTRK.ViewModels.WholesalerSalesOutstandingViewModel
+
+@{
+    ViewData["Title"] = "Sales & Outstanding";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h3><i class="bi bi-cash-coin me-2"></i>Sales & Outstanding</h3>
+            <p class="text-muted">Overview of your sales and payment status</p>
+        </div>
+    </div>
+
+    <!-- Date Filter -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label for="startDate" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="startDate" name="startDate" 
+                                   value="@Model.StartDate.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-3">
+                            <label for="endDate" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="endDate" name="endDate" 
+                                   value="@Model.EndDate.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-3">
+                            <label for="retailerFilter" class="form-label">Customer Filter</label>
+                            <select class="form-select" id="retailerFilter" name="retailerFilter">
+                                <option value="">All Customers</option>
+                                @foreach (var retailer in Model.AvailableRetailers)
+                                {
+                                    <option value="@retailer.Id" selected="@(Model.RetailerFilter == retailer.Id)">
+                                        @retailer.Name
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-filter me-1"></i>Apply Filters
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-graph-up me-2"></i>Total Sales</h5>
+                    <h3>$@Model.TotalSales.ToString("N2")</h3>
+                    <small>@Model.TotalOrders orders</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-check-circle me-2"></i>Total Paid</h5>
+                    <h3>$@Model.TotalPaid.ToString("N2")</h3>
+                    <small>@Model.PaidOrders paid orders</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-clock me-2"></i>Outstanding</h5>
+                    <h3>$@Model.TotalOutstanding.ToString("N2")</h3>
+                    <small>@Model.UnpaidOrders unpaid orders</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-percent me-2"></i>Collection Rate</h5>
+                    <h3>@((Model.TotalSales > 0 ? (Model.TotalPaid / Model.TotalSales) * 100 : 0).ToString("N1"))%</h3>
+                    <small>of total sales</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Sales Details</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.Sales.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Order #</th>
+                                        <th>Date</th>
+                                        <th>Customer</th>
+                                        <th>Total</th>
+                                        <th>Paid</th>
+                                        <th>Outstanding</th>
+                                        <th>Status</th>
+                                        <th>Payment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sale in Model.Sales)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <strong>#@sale.OrderId</strong>
+                                                @if (sale.IsExternal)
+                                                {
+                                                    <span class="badge bg-secondary ms-1">External</span>
+                                                }
+                                            </td>
+                                            <td>@sale.OrderDate.ToString("MMM dd, yyyy")</td>
+                                            <td>@sale.CustomerName</td>
+                                            <td>$@sale.OrderTotal.ToString("N2")</td>
+                                            <td>
+                                                <span class="text-success">$@sale.AmountPaid.ToString("N2")</span>
+                                            </td>
+                                            <td>
+                                                @if (sale.Outstanding > 0)
+                                                {
+                                                    <span class="text-warning">$@sale.Outstanding.ToString("N2")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">$0.00</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (sale.Status)
+                                                {
+                                                    case OrderStatus.Completed:
+                                                        <span class="badge bg-success">Completed</span>
+                                                        break;
+                                                    case OrderStatus.Delivered:
+                                                        <span class="badge bg-info">Delivered</span>
+                                                        break;
+                                                    case OrderStatus.Shipped:
+                                                        <span class="badge bg-primary">Shipped</span>
+                                                        break;
+                                                    case OrderStatus.Processing:
+                                                        <span class="badge bg-warning">Processing</span>
+                                                        break;
+                                                    case OrderStatus.Pending:
+                                                        <span class="badge bg-secondary">Pending</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-light text-dark">@sale.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (sale.PaymentStatus)
+                                                {
+                                                    case "Paid":
+                                                        <span class="badge bg-success">Paid</span>
+                                                        break;
+                                                    case "Partial":
+                                                        <span class="badge bg-warning">Partial</span>
+                                                        break;
+                                                    case "Unpaid":
+                                                        <span class="badge bg-danger">Unpaid</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-secondary">@sale.PaymentStatus</span>
+                                                        break;
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox display-4 text-muted"></i>
+                            <h5 class="text-muted mt-3">No sales found</h5>
+                            <p class="text-muted">No sales found for the selected date range.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

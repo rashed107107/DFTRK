@@ -1,0 +1,168 @@
+@model IEnumerable<DFTRK.ViewModels.PaymentItemViewModel>
+
+@{
+    ViewData["Title"] = "External Payments";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3><i class="bi bi-credit-card me-2"></i>External Payments</h3>
+            <p class="text-muted">Manage payments from external retailers for their orders</p>
+        </div>
+    </div>
+
+    <!-- External Payments Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Pending External Payments</h5>
+        </div>
+        <div class="card-body">
+            @if (Model.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>Customer</th>
+                                <th>Order Date</th>
+                                <th>Total Amount</th>
+                                <th>Amount Paid</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var transaction in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>#@transaction.OrderId</strong>
+                                    </td>
+                                    <td>
+                                        <strong>@transaction.Notes</strong>
+                                    </td>
+                                    <td>@transaction.PaymentDate.ToString("MMM d, yyyy")</td>
+                                    <td><strong>${@transaction.Amount.ToString("N2")}</strong></td>
+                                    <td>
+                                        @if (transaction.AmountPaid > 0)
+                                        {
+                                            <span class="text-success">${@transaction.AmountPaid.ToString("N2")}</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">$0.00</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (transaction.RemainingAmount > 0)
+                                        {
+                                            <span class="text-warning"><strong>${@transaction.RemainingAmount.ToString("N2")}</strong></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-success">$0.00</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (transaction.AmountPaid == 0)
+                                        {
+                                            <span class="badge bg-danger">Unpaid</span>
+                                        }
+                                        else if (transaction.RemainingAmount > 0)
+                                        {
+                                            <span class="badge bg-warning">Partial</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-success">Paid</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            @if (transaction.RemainingAmount > 0)
+                                            {
+                                                <!-- Quick Pay Full Amount Button -->
+                                                <form asp-action="QuickPayExternal" asp-route-id="@transaction.Id" method="post" style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-success btn-sm" 
+                                                            title="Pay Full Amount ($@transaction.RemainingAmount.ToString("N2"))"
+                                                            onclick="return confirm('Pay full amount of $@transaction.RemainingAmount.ToString("N2") on behalf of @transaction.Notes?')">
+                                                        <i class="bi bi-credit-card"></i> Pay $@transaction.RemainingAmount.ToString("N2")
+                                                    </button>
+                                                </form>
+                                                
+                                                <!-- Manual Payment Button -->
+                                                <a asp-action="RecordExternalPayment" asp-route-id="@transaction.Id" 
+                                                   class="btn btn-outline-success btn-sm" title="Custom Payment Amount">
+                                                    <i class="bi bi-gear"></i> Custom
+                                                </a>
+                                            }
+                                            <a asp-action="Details" asp-route-id="@transaction.Id" 
+                                               class="btn btn-outline-info btn-sm" title="View Details">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-credit-card display-4 text-muted"></i>
+                    <h5 class="text-muted mt-3">No pending external payments</h5>
+                    <p class="text-muted">All external orders have been fully paid or no external orders exist.</p>
+                    <a asp-controller="ExternalRetailers" asp-action="Index" class="btn btn-primary">
+                        <i class="bi bi-shop me-1"></i>Manage External Retailers
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    @if (Model.Any())
+    {
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary">@Model.Count()</h5>
+                        <p class="card-text">Pending Orders</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-success">${@Model.Sum(t => t.Amount).ToString("N2")}</h5>
+                        <p class="card-text">Total Sales</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-info">${@Model.Sum(t => t.AmountPaid).ToString("N2")}</h5>
+                        <p class="card-text">Amount Received</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning">${@Model.Sum(t => t.RemainingAmount).ToString("N2")}</h5>
+                        <p class="card-text">Outstanding</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div> 

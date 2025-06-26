@@ -1,0 +1,177 @@
+@model DFTRK.ViewModels.MakePaymentViewModel
+
+@{
+    ViewData["Title"] = "Record External Payment";
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a asp-action="ExternalPayments">External Payments</a></li>
+                    <li class="breadcrumb-item active">Record Payment for @Model.OrderReference</li>
+                </ol>
+            </nav>
+            <h3><i class="bi bi-credit-card me-2"></i>Record External Payment</h3>
+            <p class="text-muted">Record a payment received from <strong>@Model.WholesalerName</strong></p>
+        </div>
+    </div>
+
+    <!-- Payment Form -->
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Order Summary Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Order:</strong><br>
+                            <span class="text-primary">@Model.OrderReference</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Customer:</strong><br>
+                            <span>@Model.WholesalerName</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Total Amount:</strong><br>
+                            <span class="h5 text-success">$@Model.TotalAmount.ToString("N2")</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Outstanding:</strong><br>
+                            <span class="h5 @(Model.RemainingAmount > 0 ? "text-warning" : "text-success")">
+                                $@Model.RemainingAmount.ToString("N2")
+                            </span>
+                        </div>
+                    </div>
+                    @if (Model.AmountPaid > 0)
+                    {
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    <strong>Already Paid:</strong> $@Model.AmountPaid.ToString("N2")
+                                </small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Payment Form Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Payment Details</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="RecordExternalPayment" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                        
+                        <input type="hidden" asp-for="TransactionId" />
+                        <input type="hidden" asp-for="OrderId" />
+                        <input type="hidden" asp-for="TotalAmount" />
+                        <input type="hidden" asp-for="AmountPaid" />
+                        <input type="hidden" asp-for="RemainingAmount" />
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="PaymentAmount" class="form-label">Payment Amount *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input asp-for="PaymentAmount" class="form-control" 
+                                               placeholder="0.00" step="0.01" min="0.01" max="@Model.RemainingAmount" />
+                                    </div>
+                                    <span asp-validation-for="PaymentAmount" class="text-danger"></span>
+                                    <small class="text-muted">Maximum: $@Model.RemainingAmount.ToString("N2")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="PaymentMethod" class="form-label">Payment Method *</label>
+                                    <select asp-for="PaymentMethod" class="form-select">
+                                        <option value="">Select method...</option>
+                                        <option value="CreditCard">Credit Card</option>
+                                        <option value="BankTransfer">Bank Transfer</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label asp-for="ReferenceNumber" class="form-label">Reference Number</label>
+                                    <input asp-for="ReferenceNumber" class="form-control" 
+                                           placeholder="Check #, Transfer ID, etc." />
+                                    <span asp-validation-for="ReferenceNumber" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Date</label>
+                                    <input type="text" class="form-control" value="@DateTime.Now.ToString("MMM d, yyyy")" readonly />
+                                    <small class="text-muted">Payment will be recorded for today</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Notes" class="form-label">Payment Notes</label>
+                            <textarea asp-for="Notes" class="form-control" rows="3" 
+                                      placeholder="Any additional notes about this payment..."></textarea>
+                            <span asp-validation-for="Notes" class="text-danger"></span>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="ExternalPayments" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-check-circle me-2"></i>Record Payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        // Auto-calculate full payment button
+        document.addEventListener('DOMContentLoaded', function() {
+            const paymentInput = document.querySelector('input[name="PaymentAmount"]');
+            const remainingAmount = @Model.RemainingAmount;
+            
+            // Add quick pay buttons
+            const inputGroup = paymentInput.closest('.input-group');
+            if (inputGroup && remainingAmount > 0) {
+                const quickPayDiv = document.createElement('div');
+                quickPayDiv.className = 'mt-2';
+                quickPayDiv.innerHTML = `
+                    <button type="button" class="btn btn-sm btn-outline-success" onclick="setPaymentAmount(${remainingAmount})">
+                        Pay Full Amount ($${remainingAmount.toFixed(2)})
+                    </button>
+                `;
+                inputGroup.parentNode.appendChild(quickPayDiv);
+            }
+        });
+        
+        function setPaymentAmount(amount) {
+            document.querySelector('input[name="PaymentAmount"]').value = amount.toFixed(2);
+        }
+    </script>
+} 

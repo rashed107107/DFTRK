@@ -7,7 +7,7 @@ namespace DFTRK.Models
     {
         public int Id { get; set; }
         
-        public string RetailerId { get; set; } = string.Empty;
+        public string? RetailerId { get; set; }
         public ApplicationUser? Retailer { get; set; }
         
         public string? WholesalerId { get; set; }

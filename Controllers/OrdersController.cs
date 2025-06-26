@@ -45,7 +45,7 @@ namespace DFTRK.Controllers
 
             if (isRetailer)
             {
-                // Build the query step by step
+                // Build the query step by step - only internal orders (with RetailerId)
                 var query = _context.Orders.Where(o => o.RetailerId == user.Id);
                 
                 // Apply status filter if provided
@@ -57,14 +57,13 @@ namespace DFTRK.Controllers
                 // Apply includes and ordering after filtering
                 orders = await query
                     .Include(o => o.Wholesaler)
-                    .Include(o => o.Transaction)
                     .OrderByDescending(o => o.OrderDate)
                     .ToListAsync();
             }
             else if (isWholesaler)
             {
-                // Build the query step by step
-                var query = _context.Orders.Where(o => o.WholesalerId == user.Id);
+                // Build the query step by step - only internal orders (with RetailerId)
+                var query = _context.Orders.Where(o => o.WholesalerId == user.Id && o.RetailerId != null);
                 
                 // Apply status filter if provided
                 if (statusFilter.HasValue)
@@ -75,14 +74,13 @@ namespace DFTRK.Controllers
                 // Apply includes and ordering after filtering
                 orders = await query
                     .Include(o => o.Retailer)
-                    .Include(o => o.Transaction)
                     .OrderByDescending(o => o.OrderDate)
                     .ToListAsync();
             }
             else if (isAdmin)
             {
-                // Build the query step by step
-                var query = _context.Orders.AsQueryable();
+                // Build the query step by step - only internal orders (with RetailerId)
+                var query = _context.Orders.Where(o => o.RetailerId != null);
                 
                 // Apply status filter if provided
                 if (statusFilter.HasValue)
@@ -94,7 +92,6 @@ namespace DFTRK.Controllers
                 orders = await query
                     .Include(o => o.Retailer)
                     .Include(o => o.Wholesaler)
-                    .Include(o => o.Transaction)
                     .OrderByDescending(o => o.OrderDate)
                     .ToListAsync();
             }
@@ -121,7 +118,6 @@ namespace DFTRK.Controllers
                 .Include(o => o.Items)
                 .ThenInclude(i => i.WholesalerProduct)
                 .ThenInclude(wp => wp.Product)
-                .Include(o => o.Transaction)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
             if (order == null)

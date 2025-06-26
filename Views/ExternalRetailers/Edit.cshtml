@@ -1,0 +1,53 @@
+@model DFTRK.Models.WholesalerExternalRetailer
+
+@{
+    ViewData["Title"] = "Edit External Retailer";
+}
+
+<div class="container mt-4">
+    <h2>Edit External Retailer</h2>
+
+    <div class="card">
+        <div class="card-body">
+            <form asp-action="Edit" method="post">
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="WholesalerId" />
+                <input type="hidden" asp-for="CreatedDate" />
+                
+                <div class="form-group mb-3">
+                    <label asp-for="RetailerName" class="form-label">Retailer Name *</label>
+                    <input asp-for="RetailerName" class="form-control" required />
+                    <span asp-validation-for="RetailerName" class="text-danger"></span>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="ContactInfo" class="form-label">Contact Information</label>
+                    <input asp-for="ContactInfo" class="form-control" placeholder="Phone, email, or address (optional)" />
+                    <span asp-validation-for="ContactInfo" class="text-danger"></span>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Notes" class="form-label">Notes</label>
+                    <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Additional notes (optional)"></textarea>
+                    <span asp-validation-for="Notes" class="text-danger"></span>
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="form-check">
+                        <input asp-for="IsActive" class="form-check-input" />
+                        <label asp-for="IsActive" class="form-check-label">Active</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Update Retailer</button>
+                    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+} 

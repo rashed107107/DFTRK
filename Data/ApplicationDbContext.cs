@@ -24,6 +24,7 @@ namespace DFTRK.Data
         public DbSet<RetailerPartnership> RetailerPartnerships { get; set; }
         public DbSet<RetailerPartnerCategory> RetailerPartnerCategories { get; set; }
         public DbSet<RetailerPartnerProduct> RetailerPartnerProducts { get; set; }
+        public DbSet<WholesalerExternalRetailer> WholesalerExternalRetailers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -124,12 +125,23 @@ namespace DFTRK.Data
                 .HasForeignKey(ci => ci.WholesalerProductId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Transaction - Order
+            // Transaction - Order (Many-to-One) 
             modelBuilder.Entity<Transaction>()
                 .HasOne(t => t.Order)
                 .WithMany()
                 .HasForeignKey(t => t.OrderId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Ignore Order.Transaction navigation property to prevent OrderId1 shadow property
+            modelBuilder.Entity<Order>()
+                .Ignore(o => o.Transaction);
+
+            // Payment - Transaction
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.Transaction)
+                .WithMany(t => t.Payments)
+                .HasForeignKey(p => p.TransactionId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // RetailerPartnership - Retailer
             modelBuilder.Entity<RetailerPartnership>()

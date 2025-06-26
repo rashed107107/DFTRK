@@ -1,0 +1,139 @@
+@model DFTRK.ViewModels.CreateExternalOrderViewModel
+
+@{
+    ViewData["Title"] = "Create External Order";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-plus"></i> Create External Order</h2>
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Orders
+                </a>
+            </div>
+
+            <form asp-action="Create" method="post">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Customer Information</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label asp-for="CustomerName" class="form-label"></label>
+                                    <input asp-for="CustomerName" class="form-control" placeholder="Enter customer name" />
+                                    <span asp-validation-for="CustomerName" class="text-danger"></span>
+                                </div>
+                                <div class="mb-3">
+                                    <label asp-for="CustomerContact" class="form-label"></label>
+                                    <input asp-for="CustomerContact" class="form-control" placeholder="Phone, email, or address" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>Select Products</h5>
+                            </div>
+                            <div class="card-body">
+                                @if (Model.AvailableProducts.Any())
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Product</th>
+                                                    <th>Price</th>
+                                                    <th>Stock</th>
+                                                    <th>Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @for (int i = 0; i < Model.AvailableProducts.Count; i++)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <strong>@Model.AvailableProducts[i].ProductName</strong>
+                                                            <input type="hidden" name="SelectedProducts[@i].ProductId" value="@Model.AvailableProducts[i].ProductId" />
+                                                            <input type="hidden" name="SelectedProducts[@i].ProductName" value="@Model.AvailableProducts[i].ProductName" />
+                                                            <input type="hidden" name="SelectedProducts[@i].Price" value="@Model.AvailableProducts[i].Price" />
+                                                        </td>
+                                                        <td>${@Model.AvailableProducts[i].Price:F2}</td>
+                                                        <td>@Model.AvailableProducts[i].AvailableStock</td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   name="SelectedProducts[@i].Quantity" 
+                                                                   class="form-control form-control-sm quantity-input" 
+                                                                   min="0" 
+                                                                   max="@Model.AvailableProducts[i].AvailableStock" 
+                                                                   value="0"
+                                                                   data-price="@Model.AvailableProducts[i].Price" />
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        No products available in stock.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (Model.AvailableProducts.Any())
+                {
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5>Order Total: <span id="orderTotal" class="text-success">$0.00</span></h5>
+                                        </div>
+                                        <div>
+                                            <button type="submit" class="btn btn-primary btn-lg">
+                                                <i class="fas fa-check"></i> Create Order
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.quantity-input').on('input', function() {
+                calculateTotal();
+            });
+
+            function calculateTotal() {
+                let total = 0;
+                $('.quantity-input').each(function() {
+                    const quantity = parseInt($(this).val()) || 0;
+                    const price = parseFloat($(this).data('price')) || 0;
+                    total += quantity * price;
+                });
+                $('#orderTotal').text('$' + total.toFixed(2));
+            }
+        });
+    </script>
+} 

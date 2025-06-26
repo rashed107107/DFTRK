@@ -657,4 +657,46 @@ namespace DFTRK.ViewModels
         public PaymentMethod Method { get; set; }
         public string Reference { get; set; } = string.Empty;
     }
+
+    // Simple Sales and Outstanding report for wholesalers
+    public class WholesalerSalesOutstandingViewModel : BaseReportViewModel
+    {
+        public string WholesalerId { get; set; } = string.Empty;
+        public string WholesalerName { get; set; } = string.Empty;
+        
+        // Filter properties
+        public string? RetailerFilter { get; set; }
+        public List<RetailerFilterItem> AvailableRetailers { get; set; } = new List<RetailerFilterItem>();
+        
+        // Summary metrics
+        public decimal TotalSales { get; set; }
+        public decimal TotalPaid { get; set; }
+        public decimal TotalOutstanding { get; set; }
+        public int TotalOrders { get; set; }
+        public int PaidOrders { get; set; }
+        public int UnpaidOrders { get; set; }
+        
+        // Simple sales list
+        public List<SimpleSalesItem> Sales { get; set; } = new List<SimpleSalesItem>();
+    }
+
+    public class RetailerFilterItem
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsExternal { get; set; }
+    }
+
+    public class SimpleSalesItem
+    {
+        public int OrderId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string CustomerName { get; set; } = string.Empty; // Retailer name or "External: [Name]"
+        public decimal OrderTotal { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public OrderStatus Status { get; set; }
+        public string PaymentStatus { get; set; } = string.Empty; // "Paid", "Partial", "Unpaid"
+        public bool IsExternal { get; set; } // True if external retailer
+    }
 } 

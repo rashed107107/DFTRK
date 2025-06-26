@@ -36,6 +36,241 @@ namespace DFTRK.Controllers
             return View();
         }
 
+        // GET: Reports/WholesalerSalesOutstanding - Simple Sales and Outstanding report for Wholesalers
+        [Authorize(Roles = "Wholesaler")]
+        public async Task<IActionResult> WholesalerSalesOutstanding(DateTime? startDate, DateTime? endDate, string? retailerFilter = null)
+        {
+            // Default to current month if no dates provided
+            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1); // Include all of the end date
+
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return NotFound();
+
+            // Get all orders for this wholesaler within the date range
+            var ordersQuery = _context.Orders
+                .Include(o => o.Retailer)
+                .Where(o => o.WholesalerId == user.Id && 
+                           o.OrderDate >= startDate && 
+                           o.OrderDate <= endDate &&
+                           o.Status != OrderStatus.Cancelled);
+
+            // Apply retailer filter if specified
+            if (!string.IsNullOrEmpty(retailerFilter))
+            {
+                if (retailerFilter.StartsWith("external_"))
+                {
+                    // Filter for specific external retailer by name
+                    var externalRetailerName = retailerFilter.Replace("external_", "").Replace("_", " ");
+                    ordersQuery = ordersQuery.Where(o => o.RetailerId == null && 
+                                                    o.Notes != null && 
+                                                    o.Notes.StartsWith("External Order for: " + externalRetailerName));
+                }
+                else
+                {
+                    // Filter for specific regular retailer
+                    ordersQuery = ordersQuery.Where(o => o.RetailerId == retailerFilter);
+                }
+            }
+
+            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
+
+            // Get all transactions for these orders with current payment data
+            var orderIds = orders.Select(o => o.Id).ToList();
+            var transactions = await _context.Transactions
+                .Include(t => t.Payments)
+                .Where(t => orderIds.Contains(t.OrderId))
+                .ToListAsync();
+
+            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
+            var transactionLookup = transactions
+                .GroupBy(t => t.OrderId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Create missing transactions for orders that don't have them
+            var ordersNeedingTransactions = orders.Where(o => !transactionLookup.ContainsKey(o.Id)).ToList();
+            foreach (var order in ordersNeedingTransactions)
+            {
+                var newTransaction = new Transaction
+                {
+                    OrderId = order.Id,
+                    Amount = order.TotalAmount,
+                    AmountPaid = 0,
+                    TransactionDate = order.OrderDate,
+                    RetailerId = order.RetailerId, // Can be null for external orders
+                    WholesalerId = order.WholesalerId,
+                    Status = TransactionStatus.Pending
+                };
+                _context.Transactions.Add(newTransaction);
+                transactionLookup[order.Id] = newTransaction;
+            }
+
+            if (ordersNeedingTransactions.Any())
+            {
+                await _context.SaveChangesAsync();
+                
+                // Reload transactions to get IDs for the new ones
+                var newTransactions = await _context.Transactions
+                    .Include(t => t.Payments)
+                    .Where(t => ordersNeedingTransactions.Select(o => o.Id).Contains(t.OrderId))
+                    .ToListAsync();
+                
+                // Update lookup with reloaded transactions
+                foreach (var transaction in newTransactions)
+                {
+                    transactionLookup[transaction.OrderId] = transaction;
+                }
+            }
+
+            // Update AmountPaid for all transactions to ensure accuracy
+            foreach (var transaction in transactionLookup.Values)
+            {
+                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
+                if (transaction.AmountPaid != actualAmountPaid)
+                {
+                    transaction.AmountPaid = actualAmountPaid;
+                    
+                    // Update transaction status
+                    if (transaction.AmountPaid >= transaction.Amount)
+                    {
+                        transaction.Status = TransactionStatus.Completed;
+                    }
+                    else if (transaction.AmountPaid > 0)
+                    {
+                        transaction.Status = TransactionStatus.PartiallyPaid;
+                    }
+                    else
+                    {
+                        transaction.Status = TransactionStatus.Pending;
+                    }
+                    
+                    _context.Update(transaction);
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            // Get available retailers for filter dropdown
+            var availableRetailers = new List<RetailerFilterItem>();
+            
+            // Add regular retailers who have orders with this wholesaler
+            var regularRetailers = await _context.Orders
+                .Where(o => o.WholesalerId == user.Id && o.RetailerId != null)
+                .Include(o => o.Retailer)
+                .Select(o => o.Retailer)
+                .Distinct()
+                .ToListAsync();
+
+            foreach (var retailer in regularRetailers.Where(r => r != null))
+            {
+                availableRetailers.Add(new RetailerFilterItem
+                {
+                    Id = retailer.Id,
+                    Name = retailer.BusinessName ?? retailer.UserName ?? "Unknown",
+                    IsExternal = false
+                });
+            }
+
+            // Add individual external retailers who have orders with this wholesaler
+            var externalOrders = orders.Where(o => o.RetailerId == null).ToList();
+            var uniqueExternalRetailers = new Dictionary<string, string>(); // Key: external retailer name, Value: filter ID
+
+            foreach (var order in externalOrders)
+            {
+                if (!string.IsNullOrEmpty(order.Notes) && order.Notes.StartsWith("External Order for: "))
+                {
+                    var name = order.Notes.Replace("External Order for: ", "").Split('\n')[0];
+                    if (!string.IsNullOrEmpty(name) && !uniqueExternalRetailers.ContainsKey(name))
+                    {
+                        // Use "external_" prefix + name as the filter ID for external retailers
+                        uniqueExternalRetailers[name] = $"external_{name.Replace(" ", "_")}";
+                    }
+                }
+            }
+
+            // Add external retailers to the filter list
+            foreach (var externalRetailer in uniqueExternalRetailers)
+            {
+                availableRetailers.Add(new RetailerFilterItem
+                {
+                    Id = externalRetailer.Value, // external_[name]
+                    Name = externalRetailer.Key,  // actual name
+                    IsExternal = true
+                });
+            }
+
+            // Convert to simple sales items using verified payment data
+            var salesItems = orders.Select(o => {
+                // Use the verified transaction data for accurate payments
+                var amountPaid = transactionLookup.ContainsKey(o.Id) 
+                    ? transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0
+                    : 0;
+                var outstanding = o.TotalAmount - amountPaid;
+                
+                var paymentStatus = amountPaid >= o.TotalAmount ? "Paid" :
+                                   amountPaid > 0 ? "Partial" : "Unpaid";
+
+                // Extract customer name
+                string customerName = "Unknown";
+                if (o.RetailerId == null)
+                {
+                    // External order - extract name from notes
+                    if (!string.IsNullOrEmpty(o.Notes) && o.Notes.StartsWith("External Order for: "))
+                    {
+                        customerName = o.Notes.Replace("External Order for: ", "").Split('\n')[0];
+                    }
+                    else
+                    {
+                        customerName = "External Customer";
+                    }
+                }
+                else
+                {
+                    // Regular retailer
+                    customerName = o.Retailer?.BusinessName ?? "Unknown";
+                }
+
+                return new SimpleSalesItem
+                {
+                    OrderId = o.Id,
+                    OrderDate = o.OrderDate,
+                    CustomerName = customerName,
+                    OrderTotal = o.TotalAmount,
+                    AmountPaid = amountPaid,
+                    Outstanding = outstanding,
+                    Status = o.Status,
+                    PaymentStatus = paymentStatus,
+                    IsExternal = o.RetailerId == null
+                };
+            }).ToList();
+
+            // Calculate summary metrics using verified payment data
+            var totalSales = salesItems.Sum(s => s.OrderTotal);
+            var totalPaid = salesItems.Sum(s => s.AmountPaid);
+            var totalOutstanding = salesItems.Sum(s => s.Outstanding);
+            var totalOrders = salesItems.Count;
+            var paidOrders = salesItems.Count(s => s.PaymentStatus == "Paid");
+            var unpaidOrders = salesItems.Count(s => s.PaymentStatus == "Unpaid");
+
+            var viewModel = new WholesalerSalesOutstandingViewModel
+            {
+                StartDate = startDate.Value,
+                EndDate = endDate.Value,
+                WholesalerId = user.Id,
+                WholesalerName = user.BusinessName ?? user.UserName ?? "Unknown",
+                RetailerFilter = retailerFilter,
+                AvailableRetailers = availableRetailers.OrderBy(r => r.Name).ToList(),
+                TotalSales = totalSales,
+                TotalPaid = totalPaid,
+                TotalOutstanding = totalOutstanding,
+                TotalOrders = totalOrders,
+                PaidOrders = paidOrders,
+                UnpaidOrders = unpaidOrders,
+                Sales = salesItems
+            };
+
+            return View(viewModel);
+        }
+
         // GET: Reports/RetailerIndex - Reports dashboard for Retailers
         [Authorize(Roles = "Retailer")]
         public IActionResult RetailerIndex()
@@ -356,7 +591,13 @@ namespace DFTRK.Controllers
                 .Select(g => new
                 {
                     RetailerId = g.Key,
-                    RetailerName = g.First().Retailer?.BusinessName ?? "Unknown",
+                    RetailerName = g.Key == null ? 
+                        // External retailer - extract name from order notes
+                        (g.First().Notes?.StartsWith("External Order for: ") == true ?
+                            g.First().Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
+                            "External Customer") :
+                        // Regular retailer
+                        g.First().Retailer?.BusinessName ?? "Unknown",
                     OrderCount = g.Count(),
                     TotalAmount = g.Sum(o => o.TotalAmount),
                     ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
@@ -613,11 +854,16 @@ namespace DFTRK.Controllers
             // Group payments by retailer
             var paymentsByRetailer = payments
                 .GroupBy(p => p.Transaction?.RetailerId)
-                .Where(g => g.Key != null)
                 .Select(g => new
                 {
                     RetailerId = g.Key,
-                    RetailerName = g.First().Transaction?.Order?.Retailer?.BusinessName ?? "Unknown",
+                    RetailerName = g.Key == null ? 
+                        // External retailer - extract name from order notes
+                        (g.First().Transaction?.Order?.Notes?.StartsWith("External Order for: ") == true ?
+                            g.First().Transaction.Order.Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
+                            "External Customer") :
+                        // Regular retailer
+                        g.First().Transaction?.Order?.Retailer?.BusinessName ?? "Unknown",
                     Count = g.Count(),
                     Value = g.Sum(p => p.Amount)
                 })
@@ -1213,7 +1459,13 @@ namespace DFTRK.Controllers
                 .Select(g => new TopRetailerItem
                 {
                     RetailerId = g.Key,
-                    RetailerName = g.First().Retailer?.BusinessName ?? "Unknown",
+                    RetailerName = g.Key == null ? 
+                        // External retailer - extract name from order notes
+                        (g.First().Notes?.StartsWith("External Order for: ") == true ?
+                            g.First().Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
+                            "External Customer") :
+                        // Regular retailer
+                        g.First().Retailer?.BusinessName ?? "Unknown",
                     OrderCount = g.Count(),
                     TotalRevenue = g.Sum(o => o.TotalAmount),
                     ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
@@ -2103,7 +2355,7 @@ namespace DFTRK.Controllers
                 .Where(t => orderIds.Contains(t.OrderId))
                 .ToListAsync();
 
-            // Create lookup dictionary - handle potential duplicates by taking the first transaction per order
+            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
             var transactionLookup = transactions
                 .GroupBy(t => t.OrderId)
                 .ToDictionary(g => g.Key, g => g.First());
@@ -2395,7 +2647,7 @@ namespace DFTRK.Controllers
                 .Where(t => orderIds.Contains(t.OrderId))
                 .ToListAsync();
 
-            // Create lookup dictionary - handle potential duplicates by taking the first transaction per order
+            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
             var transactionLookup = transactions
                 .GroupBy(t => t.OrderId)
                 .ToDictionary(g => g.Key, g => g.First());

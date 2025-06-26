@@ -20,7 +20,11 @@ namespace DFTRK.ViewModels
     public class PaymentItemViewModel
     {
         public int Id { get; set; }
+        public int OrderId { get; set; }
+        public string OrderReference { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal RemainingAmount { get; set; }
         public DateTime PaymentDate { get; set; }
         public PaymentMethod Method { get; set; }
         public string? ReferenceNumber { get; set; }
@@ -32,6 +36,7 @@ namespace DFTRK.ViewModels
         public int TransactionId { get; set; }
         public int OrderId { get; set; }
         public string OrderReference { get; set; } = string.Empty;
+        public string WholesalerName { get; set; } = string.Empty; // Reused for external retailer name
         public decimal TotalAmount { get; set; }
         public decimal AmountPaid { get; set; }
         public decimal RemainingAmount { get; set; }

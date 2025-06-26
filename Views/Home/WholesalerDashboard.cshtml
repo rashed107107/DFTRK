@@ -468,10 +468,13 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-3">
+                        <a asp-controller="Reports" asp-action="WholesalerSalesOutstanding" class="btn btn-warning btn-modern">
+                            <i class="bi bi-cash-coin me-2"></i>Sales & Outstanding
+                        </a>
                         <a asp-controller="WholesalerProducts" asp-action="Create" class="btn btn-primary btn-modern">
                             <i class="bi bi-plus-circle me-2"></i>Add New Product
                         </a>
-                        <a asp-controller="Orders" asp-action="Index" class="btn btn-warning btn-modern">
+                        <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-primary btn-modern">
                             <i class="bi bi-clock me-2"></i>Process Orders
                         </a>
                         <a asp-controller="WholesalerProducts" asp-action="Index" class="btn btn-success btn-modern">

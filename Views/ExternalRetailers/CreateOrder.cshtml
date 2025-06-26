@@ -1,0 +1,263 @@
+@model object
+
+@{
+    ViewData["Title"] = "Create External Order";
+    var externalRetailer = ViewBag.ExternalRetailer as DFTRK.Models.WholesalerExternalRetailer;
+    var wholesalerProducts = ViewBag.WholesalerProducts as List<DFTRK.Models.WholesalerProduct>;
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a asp-action="Index">External Retailers</a></li>
+                    <li class="breadcrumb-item active">Create Order for @externalRetailer.RetailerName</li>
+                </ol>
+            </nav>
+            <h3><i class="bi bi-cart-plus me-2"></i>Create External Order</h3>
+            <p class="text-muted">Create a new order for <strong>@externalRetailer.RetailerName</strong></p>
+        </div>
+    </div>
+
+    <!-- Order Form -->
+    <form id="externalOrderForm" method="post" asp-action="ProcessExternalOrder">
+        <input type="hidden" name="externalRetailerId" value="@externalRetailer.Id" />
+        
+        <!-- Customer Info Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Customer Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Business Name:</strong><br>
+                                <span class="text-primary">@externalRetailer.RetailerName</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Contact Info:</strong><br>
+                                <span>@(string.IsNullOrEmpty(externalRetailer.ContactInfo) ? "Not provided" : externalRetailer.ContactInfo)</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Order Date:</strong><br>
+                                <span>@DateTime.Now.ToString("MMM d, yyyy")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Selection -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Select Products</h5>
+                        <span class="badge bg-info" id="selectedItemsCount">0 items selected</span>
+                    </div>
+                    <div class="card-body">
+                        @if (wholesalerProducts?.Any() == true)
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th width="5%">Select</th>
+                                            <th width="30%">Product</th>
+                                            <th width="15%">Category</th>
+                                            <th width="10%">Available</th>
+                                            <th width="12%">Price</th>
+                                            <th width="13%">Quantity</th>
+                                            <th width="15%">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var wp in wholesalerProducts)
+                                        {
+                                            <tr class="product-row" data-product-id="@wp.Id" data-price="@wp.Price" data-available="@wp.StockQuantity">
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input product-checkbox" 
+                                                           name="selectedProducts" value="@wp.Id" onchange="toggleProductRow(this)" />
+                                                </td>
+                                                <td>
+                                                    <strong>@wp.Product.Name</strong>
+                                                    @if (!string.IsNullOrEmpty(wp.Product.Description))
+                                                    {
+                                                        <br><small class="text-muted">@wp.Product.Description</small>
+                                                    }
+                                                </td>
+                                                <td>@wp.Product.Category?.Name</td>
+                                                <td>
+                                                    <span class="badge bg-success">@wp.StockQuantity</span>
+                                                </td>
+                                                <td>
+                                                    <strong>$@wp.Price.ToString("N2")</strong>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control quantity-input" 
+                                                           name="quantities[@wp.Id]" value="1" min="1" max="@wp.StockQuantity" 
+                                                           disabled onchange="updateSubtotal(this)" style="width: 80px;" />
+                                                </td>
+                                                <td>
+                                                    <strong class="subtotal">$0.00</strong>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-box display-4 text-muted"></i>
+                                <h5 class="text-muted mt-3">No products available</h5>
+                                <p class="text-muted">You need to have products in stock to create external orders.</p>
+                                <a asp-controller="WholesalerProducts" asp-action="Index" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-1"></i>Manage Inventory
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Summary & Submit -->
+        @if (wholesalerProducts?.Any() == true)
+        {
+            <div class="row mt-4">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-sticky me-2"></i>Order Notes (Optional)</h6>
+                        </div>
+                        <div class="card-body">
+                            <textarea name="orderNotes" class="form-control" rows="3" 
+                                      placeholder="Add any special instructions or notes for this order..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-calculator me-2"></i>Order Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total Items:</span>
+                                <strong id="totalItems">0</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Subtotal:</span>
+                                <strong id="subtotalAmount">$0.00</strong>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between mb-3">
+                                <strong>Total Amount:</strong>
+                                <strong id="totalAmount" class="text-primary fs-5">$0.00</strong>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success btn-lg" id="createOrderBtn" disabled>
+                                    <i class="bi bi-check-circle me-2"></i>Create Order
+                                </button>
+                                <a asp-action="Index" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleProductRow(checkbox) {
+            const row = checkbox.closest('tr');
+            const quantityInput = row.querySelector('.quantity-input');
+            const isChecked = checkbox.checked;
+            
+            // Enable/disable quantity input
+            quantityInput.disabled = !isChecked;
+            
+            if (isChecked) {
+                row.classList.add('table-info');
+                quantityInput.value = 1; // Reset to 1 when selected
+            } else {
+                row.classList.remove('table-info');
+                quantityInput.value = 1;
+            }
+            
+            updateSubtotal(quantityInput);
+            updateOrderSummary();
+        }
+
+        function updateSubtotal(quantityInput) {
+            const row = quantityInput.closest('tr');
+            const checkbox = row.querySelector('.product-checkbox');
+            const price = parseFloat(row.dataset.price);
+            const quantity = parseInt(quantityInput.value) || 0;
+            const available = parseInt(row.dataset.available);
+            const subtotalElement = row.querySelector('.subtotal');
+            
+            // Validate quantity
+            if (quantity > available) {
+                quantityInput.value = available;
+                alert(`Maximum available quantity is ${available}`);
+                return;
+            }
+            
+            if (quantity < 1) {
+                quantityInput.value = 1;
+                return;
+            }
+            
+            // Calculate subtotal
+            const subtotal = checkbox.checked ? (price * quantity) : 0;
+            subtotalElement.textContent = '$' + subtotal.toFixed(2);
+            
+            updateOrderSummary();
+        }
+
+        function updateOrderSummary() {
+            const checkedBoxes = document.querySelectorAll('.product-checkbox:checked');
+            const selectedCount = checkedBoxes.length;
+            
+            let totalItems = 0;
+            let totalAmount = 0;
+            
+            checkedBoxes.forEach(checkbox => {
+                const row = checkbox.closest('tr');
+                const quantity = parseInt(row.querySelector('.quantity-input').value) || 0;
+                const price = parseFloat(row.dataset.price);
+                
+                totalItems += quantity;
+                totalAmount += (price * quantity);
+            });
+            
+            // Update summary
+            document.getElementById('selectedItemsCount').textContent = selectedCount + ' items selected';
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('subtotalAmount').textContent = '$' + totalAmount.toFixed(2);
+            document.getElementById('totalAmount').textContent = '$' + totalAmount.toFixed(2);
+            
+            // Enable/disable create button
+            const createBtn = document.getElementById('createOrderBtn');
+            createBtn.disabled = selectedCount === 0;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateOrderSummary();
+        });
+    </script>
+} 

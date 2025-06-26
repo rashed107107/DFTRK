@@ -4,6 +4,7 @@ using DFTRK.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DFTRK.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250625185423_MakeExternalRetailerFieldsNullable")]
+    partial class MakeExternalRetailerFieldsNullable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,7 +133,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("RetailerId");
 
-                    b.ToTable("Carts", (string)null);
+                    b.ToTable("Carts");
                 });
 
             modelBuilder.Entity("DFTRK.Models.CartItem", b =>
@@ -159,7 +162,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerProductId");
 
-                    b.ToTable("CartItems", (string)null);
+                    b.ToTable("CartItems");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Category", b =>
@@ -182,7 +185,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("CreatedById");
 
-                    b.ToTable("Categories", (string)null);
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Order", b =>
@@ -201,6 +204,7 @@ namespace DFTRK.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("RetailerId")
+                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("Status")
@@ -218,7 +222,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerId");
 
-                    b.ToTable("Orders", (string)null);
+                    b.ToTable("Orders");
                 });
 
             modelBuilder.Entity("DFTRK.Models.OrderItem", b =>
@@ -256,7 +260,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerProductId");
 
-                    b.ToTable("OrderItems", (string)null);
+                    b.ToTable("OrderItems");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Payment", b =>
@@ -291,7 +295,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("TransactionId");
 
-                    b.ToTable("Payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Product", b =>
@@ -327,7 +331,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("DFTRK.Models.RetailerPartnerCategory", b =>
@@ -360,7 +364,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("PartnershipId");
 
-                    b.ToTable("RetailerPartnerCategories", (string)null);
+                    b.ToTable("RetailerPartnerCategories");
                 });
 
             modelBuilder.Entity("DFTRK.Models.RetailerPartnerProduct", b =>
@@ -425,7 +429,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("PartnershipId");
 
-                    b.ToTable("RetailerPartnerProducts", (string)null);
+                    b.ToTable("RetailerPartnerProducts");
                 });
 
             modelBuilder.Entity("DFTRK.Models.RetailerPartnership", b =>
@@ -464,7 +468,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("RetailerId");
 
-                    b.ToTable("RetailerPartnerships", (string)null);
+                    b.ToTable("RetailerPartnerships");
                 });
 
             modelBuilder.Entity("DFTRK.Models.RetailerProduct", b =>
@@ -500,7 +504,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerProductId");
 
-                    b.ToTable("RetailerProducts", (string)null);
+                    b.ToTable("RetailerProducts");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Transaction", b =>
@@ -520,10 +524,14 @@ namespace DFTRK.Migrations
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("OrderId1")
+                        .HasColumnType("int");
+
                     b.Property<string>("PaymentMethod")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RetailerId")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Status")
@@ -543,7 +551,11 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("Transactions", (string)null);
+                    b.HasIndex("OrderId1")
+                        .IsUnique()
+                        .HasFilter("[OrderId1] IS NOT NULL");
+
+                    b.ToTable("Transactions");
                 });
 
             modelBuilder.Entity("DFTRK.Models.WholesalerExternalRetailer", b =>
@@ -581,7 +593,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerId");
 
-                    b.ToTable("WholesalerExternalRetailers", (string)null);
+                    b.ToTable("WholesalerExternalRetailers");
                 });
 
             modelBuilder.Entity("DFTRK.Models.WholesalerProduct", b =>
@@ -614,7 +626,7 @@ namespace DFTRK.Migrations
 
                     b.HasIndex("WholesalerId");
 
-                    b.ToTable("WholesalerProducts", (string)null);
+                    b.ToTable("WholesalerProducts");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -795,7 +807,8 @@ namespace DFTRK.Migrations
                     b.HasOne("DFTRK.Models.ApplicationUser", "Retailer")
                         .WithMany()
                         .HasForeignKey("RetailerId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("DFTRK.Models.ApplicationUser", "Wholesaler")
                         .WithMany()
@@ -914,6 +927,10 @@ namespace DFTRK.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("DFTRK.Models.Order", null)
+                        .WithOne("Transaction")
+                        .HasForeignKey("DFTRK.Models.Transaction", "OrderId1");
+
                     b.Navigation("Order");
                 });
 
@@ -1011,6 +1028,8 @@ namespace DFTRK.Migrations
             modelBuilder.Entity("DFTRK.Models.Order", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("Transaction");
                 });
 
             modelBuilder.Entity("DFTRK.Models.Product", b =>

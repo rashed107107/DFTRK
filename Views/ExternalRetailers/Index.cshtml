@@ -1,0 +1,127 @@
+@model List<DFTRK.ViewModels.ExternalOrderViewModel>
+
+@{
+    ViewData["Title"] = "External Orders";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-store-alt"></i> External Orders</h2>
+                <a asp-action="Create" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create New Order
+                </a>
+            </div>
+
+            @if (Model.Any())
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Order #</th>
+                                        <th>Customer</th>
+                                        <th>Date</th>
+                                        <th>Total</th>
+                                        <th>Paid</th>
+                                        <th>Outstanding</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var order in Model)
+                                    {
+                                        <tr>
+                                            <td><strong>#@order.OrderId</strong></td>
+                                            <td>@order.CustomerName</td>
+                                            <td>@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                                            <td><strong>$@order.TotalAmount</strong></td>
+                                            <td class="text-success">$@order.AmountPaid</td>
+                                            <td class="@(order.Outstanding > 0 ? "text-danger" : "text-muted")">$@order.Outstanding</td>
+                                            <td>
+                                                @if (order.PaymentStatus == "Paid")
+                                                {
+                                                    <span class="badge bg-success">Paid</span>
+                                                }
+                                                else if (order.PaymentStatus == "Partial")
+                                                {
+                                                    <span class="badge bg-warning">Partial</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">Unpaid</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (order.Outstanding > 0)
+                                                {
+                                                    <div class="btn-group" role="group">
+                                                        <form asp-action="PayFull" method="post" style="display: inline;">
+                                                            <input type="hidden" name="id" value="@order.OrderId" />
+                                                            <button type="submit" class="btn btn-success btn-sm">
+                                                                <i class="fas fa-check"></i> Pay $@order.Outstanding
+                                                            </button>
+                                                        </form>
+                                                        <a asp-action="Pay" asp-route-id="@order.OrderId" class="btn btn-outline-primary btn-sm">
+                                                            <i class="fas fa-money-bill-wave"></i> Custom
+                                                        </a>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-success"><i class="fas fa-check-circle"></i> Complete</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5>Total Orders</h5>
+                                <h3>@Model.Count</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5>Total Sales</h5>
+                                <h3>$@Model.Sum(o => o.TotalAmount)</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <h5>Outstanding</h5>
+                                <h3>$@Model.Sum(o => o.Outstanding)</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-store-alt fa-3x text-muted mb-3"></i>
+                    <h4>No External Orders Yet</h4>
+                    <p class="text-muted">Create your first external order to get started.</p>
+                    <a asp-action="Create" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create First Order
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div> 

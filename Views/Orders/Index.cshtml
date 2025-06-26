@@ -68,7 +68,25 @@
                                 <td>@order.OrderDate.ToShortDateString()</td>
                                 @if (isAdmin || isWholesaler)
                                 {
-                                    <td>@order.Retailer?.BusinessName</td>
+                                    <td>
+                                        @if (order.Retailer?.BusinessName != null)
+                                        {
+                                            @order.Retailer.BusinessName
+                                        }
+                                        else if (order.RetailerId == null && order.Notes != null && order.Notes.StartsWith("External Order for: "))
+                                        {
+                                            var externalRetailerName = order.Notes.Split('\n')[0].Replace("External Order for: ", "").Trim();
+                                            <span class="badge bg-secondary me-1">External</span>@externalRetailerName
+                                        }
+                                        else if (order.RetailerId == null)
+                                        {
+                                            <span class="text-muted">External Customer</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Unknown</span>
+                                        }
+                                    </td>
                                 }
                                 @if (isAdmin || isRetailer)
                                 {

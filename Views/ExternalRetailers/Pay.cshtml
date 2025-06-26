@@ -1,0 +1,110 @@
+@model DFTRK.ViewModels.ExternalPaymentViewModel
+
+@{
+    ViewData["Title"] = "Make Payment";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-money-bill-wave"></i> Make Payment</h2>
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Orders
+                </a>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Order Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-2">
+                                <div class="col-4"><strong>Order #:</strong></div>
+                                <div class="col-8">#@Model.OrderId</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-4"><strong>Customer:</strong></div>
+                                <div class="col-8">@Model.CustomerName</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-4"><strong>Total Amount:</strong></div>
+                                <div class="col-8"><strong>${@Model.TotalAmount:F2}</strong></div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-4"><strong>Amount Paid:</strong></div>
+                                <div class="col-8 text-success">${@Model.AmountPaid:F2}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-4"><strong>Outstanding:</strong></div>
+                                <div class="col-8 text-danger"><strong>${@Model.Outstanding:F2}</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Payment Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <form asp-action="Pay" method="post">
+                                <input type="hidden" asp-for="OrderId" />
+                                <input type="hidden" asp-for="TransactionId" />
+                                <input type="hidden" asp-for="CustomerName" />
+                                <input type="hidden" asp-for="TotalAmount" />
+                                <input type="hidden" asp-for="AmountPaid" />
+                                <input type="hidden" asp-for="Outstanding" />
+
+                                <div class="mb-3">
+                                    <label asp-for="PaymentAmount" class="form-label"></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input asp-for="PaymentAmount" class="form-control" step="0.01" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="setFullAmount()">
+                                            Full Amount
+                                        </button>
+                                    </div>
+                                    <span asp-validation-for="PaymentAmount" class="text-danger"></span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="PaymentMethod" class="form-label"></label>
+                                    <select asp-for="PaymentMethod" class="form-select">
+                                        <option value="Cash">Cash</option>
+                                        <option value="CreditCard">Credit Card</option>
+                                        <option value="DebitCard">Debit Card</option>
+                                        <option value="BankTransfer">Bank Transfer</option>
+                                        <option value="Check">Check</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label asp-for="Notes" class="form-label"></label>
+                                    <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Optional payment notes"></textarea>
+                                </div>
+
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-check"></i> Record Payment
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function setFullAmount() {
+            document.querySelector('input[name="PaymentAmount"]').value = @Model.Outstanding.ToString("F2");
+        }
+    </script>
+} 
