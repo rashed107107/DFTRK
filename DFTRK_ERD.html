@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFTRK - Entity Relationship Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .legend {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .legend h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .legend-item {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .entity-type {
+            font-weight: bold;
+            color: #3498db;
+        }
+        #mermaid-diagram {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .download-info {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #27ae60;
+        }
+        .metadata {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DFTRK - Entity Relationship Diagram</h1>
+        <p class="subtitle">Complete Database Schema for Distribution & Food Track System</p>
+        
+        <div class="legend">
+            <h3>📋 Database Schema Overview</h3>
+            <div class="legend-item"><span class="entity-type">User Management:</span> ApplicationUser (Identity-based with roles: Admin, Wholesaler, Retailer)</div>
+            <div class="legend-item"><span class="entity-type">Product Catalog:</span> Category → Product → WholesalerProduct → RetailerProduct</div>
+            <div class="legend-item"><span class="entity-type">Order Processing:</span> Cart → CartItem → Order → OrderItem → Transaction → Payment</div>
+            <div class="legend-item"><span class="entity-type">Partnership System:</span> RetailerPartnership → RetailerPartnerCategory → RetailerPartnerProduct</div>
+            <div class="legend-item"><span class="entity-type">External Operations:</span> WholesalerExternalRetailer (for non-system customers)</div>
+        </div>
+
+        <div id="mermaid-diagram">
+            <div class="mermaid">
+erDiagram
+    %% User Management
+    ApplicationUser {
+        string Id PK "Identity User ID"
+        string BusinessName
+        string Address
+        string City
+        string State
+        string PostalCode
+        string Country
+        string TaxId
+        UserType UserType "Admin/Wholesaler/Retailer"
+        string UserName "From IdentityUser"
+        string Email "From IdentityUser"
+        string PhoneNumber "From IdentityUser"
+    }
+    
+    %% Product Management
+    Category {
+        int Id PK
+        string Name
+        string CreatedById FK
+    }
+    
+    Product {
+        int Id PK
+        string Name
+        string Description
+        string SKU
+        int CategoryId FK
+        string ImageUrl
+    }
+    
+    WholesalerProduct {
+        int Id PK
+        int ProductId FK
+        string WholesalerId FK
+        decimal Price
+        int StockQuantity
+        bool IsActive
+    }
+    
+    RetailerProduct {
+        int Id PK
+        int WholesalerProductId FK
+        string RetailerId FK
+        decimal PurchasePrice
+        decimal SellingPrice
+        int StockQuantity
+        string Notes
+    }
+    
+    %% Order Management
+    Order {
+        int Id PK
+        string RetailerId FK "Nullable for external orders"
+        string WholesalerId FK
+        DateTime OrderDate
+        OrderStatus Status "Pending/Processing/Shipped/Delivered/Completed/Cancelled"
+        decimal TotalAmount
+        string Notes
+    }
+    
+    OrderItem {
+        int Id PK
+        int OrderId FK
+        int WholesalerProductId FK "Nullable for partnership products"
+        int PartnerProductId "For partnership products"
+        string ProductName "For partnership products"
+        int Quantity
+        decimal UnitPrice
+        decimal Subtotal
+    }
+    
+    %% Cart Management
+    Cart {
+        int Id PK
+        string RetailerId FK
+        DateTime CreatedAt
+    }
+    
+    CartItem {
+        int Id PK
+        int CartId FK
+        int WholesalerProductId FK
+        int Quantity
+        decimal Price
+    }
+    
+    %% Transaction & Payment
+    Transaction {
+        int Id PK
+        int OrderId FK
+        string RetailerId FK "Nullable for external orders"
+        string WholesalerId FK
+        decimal Amount
+        decimal AmountPaid
+        DateTime TransactionDate
+        TransactionStatus Status "Pending/PartiallyPaid/Completed/Failed/Refunded"
+        string PaymentMethod
+        string TransactionReference
+    }
+    
+    Payment {
+        int Id PK
+        int TransactionId FK
+        decimal Amount
+        DateTime PaymentDate
+        PaymentMethod Method "CreditCard/BankTransfer/Cash/Other"
+        string ReferenceNumber
+        string Notes
+    }
+    
+    %% Partnership Management
+    RetailerPartnership {
+        int Id PK
+        string RetailerId FK
+        string WholesalerName
+        string PartnershipName
+        string Notes
+        DateTime CreatedDate
+        bool IsActive
+    }
+    
+    RetailerPartnerCategory {
+        int Id PK
+        int PartnershipId FK
+        string Name
+        string Description
+        DateTime CreatedDate
+        bool IsActive
+    }
+    
+    RetailerPartnerProduct {
+        int Id PK
+        int PartnershipId FK
+        int CategoryId FK
+        string Name
+        string Description
+        decimal Price
+        int StockQuantity
+        string Notes
+        DateTime CreatedDate
+        bool IsActive
+    }
+    
+    %% External Retailer Management
+    WholesalerExternalRetailer {
+        int Id PK
+        string WholesalerId FK
+        string RetailerName
+        string ContactInfo
+        string Notes
+        bool IsActive
+        DateTime CreatedDate
+    }
+    
+    %% Relationships
+    
+    %% User relationships
+    ApplicationUser ||--o{ Category : "creates"
+    ApplicationUser ||--o{ WholesalerProduct : "owns_as_wholesaler"
+    ApplicationUser ||--o{ RetailerProduct : "owns_as_retailer"
+    ApplicationUser ||--o{ Order : "places_as_retailer"
+    ApplicationUser ||--o{ Order : "receives_as_wholesaler"
+    ApplicationUser ||--o{ Cart : "owns"
+    ApplicationUser ||--o{ RetailerPartnership : "has_partnerships"
+    ApplicationUser ||--o{ WholesalerExternalRetailer : "manages_external_retailers"
+    
+    %% Product relationships
+    Category ||--o{ Product : "contains"
+    Product ||--o{ WholesalerProduct : "sold_by_wholesalers"
+    WholesalerProduct ||--o{ RetailerProduct : "purchased_by_retailers"
+    WholesalerProduct ||--o{ CartItem : "in_cart"
+    WholesalerProduct ||--o{ OrderItem : "ordered"
+    
+    %% Order relationships
+    Order ||--o{ OrderItem : "contains"
+    Order ||--|| Transaction : "has_transaction"
+    
+    %% Cart relationships
+    Cart ||--o{ CartItem : "contains"
+    
+    %% Payment relationships
+    Transaction ||--o{ Payment : "has_payments"
+    
+    %% Partnership relationships
+    RetailerPartnership ||--o{ RetailerPartnerCategory : "has_categories"
+    RetailerPartnership ||--o{ RetailerPartnerProduct : "has_products"
+    RetailerPartnerCategory ||--o{ RetailerPartnerProduct : "categorizes"
+            </div>
+        </div>
+
+        <div class="download-info">
+            <h4>📥 Download Instructions</h4>
+            <p><strong>To save this ERD:</strong></p>
+            <ol>
+                <li>Right-click anywhere on this page</li>
+                <li>Select "Save as..." or "Save page as..."</li>
+                <li>Choose "Web Page, Complete" or "HTML" format</li>
+                <li>Name it "DFTRK_ERD.html"</li>
+            </ol>
+            <p><em>The diagram will render when you open the saved HTML file in any browser.</em></p>
+        </div>
+
+        <div class="metadata">
+            <h4>📊 Database Statistics</h4>
+            <ul>
+                <li><strong>Total Entities:</strong> 15 main entities</li>
+                <li><strong>Core Business Entities:</strong> ApplicationUser, Product, Order, Transaction, Payment</li>
+                <li><strong>Support Entities:</strong> Category, Cart, Partnership models, External retailer</li>
+                <li><strong>Relationship Types:</strong> One-to-Many (primary), One-to-One (Order-Transaction)</li>
+                <li><strong>Key Features:</strong> Role-based access, Multi-tenant support, External order management</li>
+                <li><strong>Generated:</strong> <span id="current-date"></span></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            er: {
+                entityPadding: 15,
+                fontSize: 12
+            }
+        });
+
+        // Set current date
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString();
+    </script>
+</body>
+</html> 

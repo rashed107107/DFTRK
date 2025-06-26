@@ -2585,8 +2585,6 @@ namespace DFTRK.Controllers
             // Get all orders (both wholesaler and partnership orders)
             var ordersQuery = _context.Orders
                 .Include(o => o.Wholesaler)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t!.Payments)
                 .Include(o => o.Items) // Include order items to get partnership info
                 .Where(o => o.RetailerId == user.Id && 
                            o.OrderDate >= startDate && 
@@ -2621,10 +2619,18 @@ namespace DFTRK.Controllers
 
             var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
 
-            // Ensure all orders have transactions - create missing ones (same pattern as WholesalerPayments)
+            // Get all transactions for these orders with current payment data
+            var orderIds = orders.Select(o => o.Id).ToList();
+            var transactions = await _context.Transactions
+                .Include(t => t.Payments)
+                .Where(t => orderIds.Contains(t.OrderId))
+                .ToListAsync();
+
+            // Ensure all orders have transactions - create missing ones
+            var existingTransactionOrderIds = transactions.Select(t => t.OrderId).ToHashSet();
             foreach (var order in orders)
             {
-                if (order.Transaction == null)
+                if (!existingTransactionOrderIds.Contains(order.Id))
                 {
                     var newTransaction = new Transaction
                     {
@@ -2632,20 +2638,14 @@ namespace DFTRK.Controllers
                         Amount = order.TotalAmount,
                         AmountPaid = 0,
                         TransactionDate = order.OrderDate,
+                        Status = TransactionStatus.Pending,
                         Payments = new List<Payment>()
                     };
                     _context.Transactions.Add(newTransaction);
-                    order.Transaction = newTransaction;
+                    transactions.Add(newTransaction);
                 }
             }
             await _context.SaveChangesAsync();
-
-            // Get all transactions for these orders with current payment data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
 
             // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
             var transactionLookup = transactions
@@ -2659,19 +2659,25 @@ namespace DFTRK.Controllers
                 if (transaction.AmountPaid != actualAmountPaid)
                 {
                     transaction.AmountPaid = actualAmountPaid;
+                    
+                    // Update transaction status
+                    if (transaction.AmountPaid >= transaction.Amount)
+                    {
+                        transaction.Status = TransactionStatus.Completed;
+                    }
+                    else if (transaction.AmountPaid > 0)
+                    {
+                        transaction.Status = TransactionStatus.PartiallyPaid;
+                    }
+                    else
+                    {
+                        transaction.Status = TransactionStatus.Pending;
+                    }
+                    
                     _context.Update(transaction);
                 }
             }
             await _context.SaveChangesAsync();
-
-            // Update the orders' Transaction objects with the corrected AmountPaid values
-            foreach (var order in orders)
-            {
-                if (transactionLookup.ContainsKey(order.Id))
-                {
-                    order.Transaction = transactionLookup[order.Id];
-                }
-            }
 
             // Calculate summary metrics using the synchronized transaction data
             var totalOrders = orders.Count;
@@ -2697,7 +2703,7 @@ namespace DFTRK.Controllers
                 .Where(rp => rp.RetailerId == user.Id && rp.IsActive)
                 .ToListAsync();
 
-            // Build the simple view model
+            // Build the simple view model with transaction data attached
             var viewModel = new SalesReportViewModel
             {
                 StartDate = startDate.Value,
@@ -2711,12 +2717,26 @@ namespace DFTRK.Controllers
                 OutstandingAmount = purchasesOutstanding,
                 CollectionRate = totalPurchases > 0 ? (totalPaid / totalPurchases) * 100 : 0,
                 
-                // Orders collection - update with corrected transaction data
+                // Orders collection - manually attach transaction data since navigation is ignored
                 Orders = orders.Select(o => {
-                    // Update Transaction information with the latest data from our lookup
+                    // Manually attach transaction information
                     if (transactionLookup.ContainsKey(o.Id))
                     {
-                        o.Transaction = transactionLookup[o.Id];
+                        // Create a new order object with transaction attached for display
+                        return new Order
+                        {
+                            Id = o.Id,
+                            OrderDate = o.OrderDate,
+                            TotalAmount = o.TotalAmount,
+                            Status = o.Status,
+                            Notes = o.Notes,
+                            WholesalerId = o.WholesalerId,
+                            RetailerId = o.RetailerId,
+                            Wholesaler = o.Wholesaler,
+                            Items = o.Items,
+                            // Manually set the transaction since navigation is ignored
+                            Transaction = transactionLookup[o.Id]
+                        };
                     }
                     return o;
                 }).ToList(),

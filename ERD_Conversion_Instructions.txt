@@ -1,0 +1,48 @@
+# How to Convert DFTRK_ERD.mmd to PNG/JPG
+
+## Option 1: Online Mermaid Live Editor (RECOMMENDED - EASIEST)
+1. Go to https://mermaid.live/
+2. Delete the default content in the editor
+3. Copy and paste the ENTIRE content from DFTRK_ERD.mmd
+4. Click "Download PNG" or "Download SVG" button at the top
+5. If you need JPG, convert the PNG using any image converter
+
+## Option 2: VS Code Extension (If you have VS Code)
+1. Install "Mermaid Preview" extension in VS Code
+2. Open DFTRK_ERD.mmd in VS Code
+3. Press Ctrl+Shift+P and search "Mermaid: Generate Preview"
+4. Right-click the preview → "Export as PNG/SVG"
+
+## Option 3: Browser Screenshot (Quick & Dirty)
+1. Open DFTRK_ERD.html in your browser
+2. Take a screenshot of the diagram (Windows: Win+Shift+S)
+3. Crop and save as PNG/JPG
+
+## Option 4: Install Node.js and mermaid-cli (Advanced)
+1. Download and install Node.js from https://nodejs.org/
+2. Open command prompt as Administrator
+3. Run: npm install -g @mermaid-js/mermaid-cli
+4. Run: mmdc -i DFTRK_ERD.mmd -o DFTRK_ERD.png
+
+## Option 5: Online Image Converters
+1. Use Option 1 to get SVG
+2. Upload SVG to online converter like:
+   - cloudconvert.com
+   - convertio.co
+   - Any SVG to PNG/JPG converter
+
+## Option 6: Print to PDF then Convert
+1. Open DFTRK_ERD.html in browser
+2. Print → Save as PDF
+3. Convert PDF to PNG/JPG using online tools
+
+## QUICK START (Recommended):
+1. Go to https://mermaid.live/
+2. Copy ALL content from DFTRK_ERD.mmd
+3. Paste it into the editor
+4. Click 'Download PNG'
+
+Note: The diagram is quite large (15 entities), so make sure to:
+- Use high resolution when downloading
+- Consider downloading as SVG for best quality
+- The PNG will be around 1920x1080 pixels or larger 
