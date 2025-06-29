@@ -6,45 +6,7 @@
     <div class="row mb-4">
         <div class="col">
             <h1>Reports Dashboard</h1>
-            <p class="text-muted">View and analyze your business data</p>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">Sales Reports</h5>
-                    <p class="card-text flex-grow-1">Analyze sales performance by date range, including order status, value, and trends.</p>
-                    <a asp-action="Sales" class="btn btn-primary mt-auto">
-                        <i class="bi bi-graph-up me-2"></i>View Sales Reports
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">Payment Reports</h5>
-                    <p class="card-text flex-grow-1">Analyze payment data by payment method, date, and transaction status.</p>
-                    <a asp-action="Payments" class="btn btn-success mt-auto">
-                        <i class="bi bi-credit-card me-2"></i>View Payment Reports
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">User Reports</h5>
-                    <p class="card-text flex-grow-1">Analyze user activity, including registration trends and spending patterns.</p>
-                    <a asp-action="Users" class="btn btn-info text-white mt-auto">
-                        <i class="bi bi-people me-2"></i>View User Reports
-                    </a>
-                </div>
-            </div>
+            <p class="text-muted">Simple and clear business reports</p>
         </div>
     </div>
 
@@ -52,12 +14,70 @@
     {
         <div class="row mb-4">
             <div class="col-md-4">
-                <div class="card h-100 border-warning">
+                <div class="card h-100">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title text-warning">Financial Performance Report</h5>
-                        <p class="card-text flex-grow-1">Analyze platform revenue, transaction fees, and accounts receivable aging.</p>
-                        <a asp-action="Financial" class="btn btn-warning mt-auto">
-                            <i class="bi bi-cash-stack me-2"></i>View Financial Report
+                        <h5 class="card-title">👥 Users Report</h5>
+                        <p class="card-text flex-grow-1">View user registration trends and activity summary.</p>
+                        <a asp-action="Users" class="btn btn-primary mt-auto">
+                            <i class="bi bi-people me-2"></i>View Users
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">💰 Financial Report</h5>
+                        <p class="card-text flex-grow-1">Platform revenue and transaction summary.</p>
+                        <a asp-action="Financial" class="btn btn-success mt-auto">
+                            <i class="bi bi-cash-stack me-2"></i>View Financial
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">🔧 Maintenance</h5>
+                        <p class="card-text flex-grow-1">System maintenance and data fixes.</p>
+                        <a asp-action="UpdatePaymentStatuses" class="btn btn-warning mt-auto">
+                            <i class="bi bi-arrow-repeat me-2"></i>Fix Payment Status
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (User.IsInRole("Wholesaler"))
+    {
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">📊 Sales & Outstanding</h5>
+                        <p class="card-text flex-grow-1">View your sales and payment status.</p>
+                        <a asp-action="WholesalerSalesOutstanding" class="btn btn-primary mt-auto">
+                            <i class="bi bi-graph-up me-2"></i>View Sales
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (User.IsInRole("Retailer"))
+    {
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">🛒 Purchase History</h5>
+                        <p class="card-text flex-grow-1">View your purchase history and payments.</p>
+                        <a asp-action="RetailerPurchases" class="btn btn-primary mt-auto">
+                            <i class="bi bi-cart-check me-2"></i>View Purchases
                         </a>
                     </div>
                 </div>
@@ -69,33 +89,35 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Quick Tips</h5>
+                    <h5 class="mb-0">📝 Quick Tips</h5>
                 </div>
                 <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <i class="bi bi-info-circle text-primary me-2"></i>
-                            Use date filters in reports to narrow down your analysis to specific time periods.
-                        </li>
-                        <li class="list-group-item">
-                            <i class="bi bi-info-circle text-primary me-2"></i>
-                            Export reports as needed for your financial records or business planning.
-                        </li>
-                        <li class="list-group-item">
-                            <i class="bi bi-info-circle text-primary me-2"></i>
-                            Monitor user activity reports to identify your most active wholesalers and retailers.
-                        </li>
-                        @if (User.IsInRole("Admin"))
-                        {
-                            <li class="list-group-item">
-                                <i class="bi bi-gear text-warning me-2"></i>
-                                <a asp-action="UpdatePaymentStatuses" class="btn btn-warning btn-sm">
-                                    <i class="bi bi-arrow-repeat me-1"></i>Update Payment Statuses
-                                </a>
-                                <small class="text-muted ms-2">Fix payment statuses for all transactions</small>
-                            </li>
-                        }
-                    </ul>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-info-circle text-primary me-2"></i>
+                                    Use date filters to view specific time periods
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-info-circle text-primary me-2"></i>
+                                    Reports show real-time data from your transactions
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="bi bi-info-circle text-primary me-2"></i>
+                                    Financial data includes all completed orders
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-info-circle text-primary me-2"></i>
+                                    Contact support if you see any data discrepancies
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

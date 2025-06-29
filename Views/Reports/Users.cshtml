@@ -88,9 +88,7 @@
                                 {
                                     <tr>
                                         <td>
-                                            <a href="@Url.Action("RetailerPerformance", new { id = retailer.Id })">
                                                 @(string.IsNullOrEmpty(retailer.BusinessName) ? retailer.UserName : retailer.BusinessName)
-                                            </a>
                                         </td>
                                         <td>@retailer.OrderCount</td>
                                         <td>$@retailer.TotalSpent.ToString("N2")</td>
@@ -127,9 +125,7 @@
                                 {
                                     <tr>
                                         <td>
-                                            <a href="@Url.Action("WholesalerPerformance", new { id = wholesaler.Id })">
                                                 @(string.IsNullOrEmpty(wholesaler.BusinessName) ? wholesaler.UserName : wholesaler.BusinessName)
-                                            </a>
                                         </td>
                                         <td>@wholesaler.OrderCount</td>
                                         <td>$@wholesaler.TotalEarned.ToString("N2")</td>

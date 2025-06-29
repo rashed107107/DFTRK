@@ -80,7 +80,7 @@
                     </div>
                 </div>
                 <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Sales">View Details</a>
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Financial">View Details</a>
                     <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
                 </div>
             </div>
@@ -102,7 +102,7 @@
                     </div>
                 </div>
                 <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Payments">View Details</a>
+                    <a class="small text-white stretched-link" asp-controller="Reports" asp-action="Financial">View Details</a>
                     <div class="small text-white"><i class="bi bi-arrow-right"></i></div>
                 </div>
             </div>
@@ -238,8 +238,9 @@
                                 <tr>
                                     <th>Order #</th>
                                     <th>Date</th>
-                                    <th>Retailer</th>
-                                    <th>Wholesaler</th>
+                                    <th>Customer</th>
+                                    <th>Supplier</th>
+                                    <th>Type</th>
                                     <th>Total</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -251,8 +252,54 @@
                                     <tr>
                                         <td><a asp-controller="Orders" asp-action="Details" asp-route-id="@order.Id">#@order.Id</a></td>
                                         <td>@order.OrderDate.ToShortDateString()</td>
-                                        <td>@order.Retailer?.BusinessName</td>
-                                        <td>@order.Wholesaler?.BusinessName</td>
+                                        <td>
+                                            @if (order.RetailerId != null)
+                                            {
+                                                <span>@order.Retailer?.BusinessName</span>
+                                            }
+                                            else if (order.Notes != null && order.Notes.StartsWith("External Order for: "))
+                                            {
+                                                <span>@order.Notes.Split('\n')[0].Replace("External Order for: ", "").Trim()</span>
+                                                <small class="text-muted">(External)</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Unknown</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (order.WholesalerId != null)
+                                            {
+                                                <span>@order.Wholesaler?.BusinessName</span>
+                                            }
+                                            else if (order.Notes != null && order.Notes.StartsWith("Partnership Order from: "))
+                                            {
+                                                <span>@order.Notes.Split('\n')[0].Replace("Partnership Order from: ", "").Trim()</span>
+                                                <small class="text-muted">(Partner)</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">Unknown</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (order.RetailerId != null && order.WholesalerId != null)
+                                            {
+                                                <span class="badge bg-primary">Standard</span>
+                                            }
+                                            else if (order.RetailerId == null && order.WholesalerId != null)
+                                            {
+                                                <span class="badge bg-info">External</span>
+                                            }
+                                            else if (order.RetailerId != null && order.WholesalerId == null)
+                                            {
+                                                <span class="badge bg-success">Partnership</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Unknown</span>
+                                            }
+                                        </td>
                                         <td>$@order.TotalAmount.ToString("F2")</td>
                                         <td>
                                             @switch (order.Status)
@@ -359,8 +406,8 @@
                         <a asp-controller="Payments" asp-action="Index" class="btn btn-outline-info mb-2">
                             <i class="bi bi-credit-card me-2"></i>View Payments
                         </a>
-                        <a asp-controller="Reports" asp-action="Sales" class="btn btn-outline-warning mb-2">
-                            <i class="bi bi-graph-up me-2"></i>Sales Report
+                        <a asp-controller="Reports" asp-action="Financial" class="btn btn-outline-warning mb-2">
+                            <i class="bi bi-graph-up me-2"></i>Financial Report
                         </a>
                     </div>
                 </div>

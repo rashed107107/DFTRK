@@ -67,6 +67,9 @@ namespace DFTRK.Controllers
                 // Enhanced revenue calculation - use same logic as reports (exclude cancelled orders)
                 var allTransactions = await _context.Transactions
                     .Include(t => t.Order)
+                        .ThenInclude(o => o.Wholesaler)
+                    .Include(t => t.Order)
+                        .ThenInclude(o => o.Retailer)
                     .Include(t => t.Payments)
                     .Where(t => t.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
                     .ToListAsync();
@@ -130,7 +133,6 @@ namespace DFTRK.Controllers
             var recentOrders = await _context.Orders
                 .Include(o => o.Retailer)
                 .Include(o => o.Wholesaler)
-                    .Include(o => o.Transaction)
                     .Where(o => o.Status != OrderStatus.Cancelled) // Exclude cancelled orders
                 .OrderByDescending(o => o.OrderDate)
                     .Take(10)
@@ -138,7 +140,8 @@ namespace DFTRK.Controllers
 
                 // Top performing wholesalers and retailers (using actual revenue)
                 var topWholesalers = allTransactions
-                    .GroupBy(t => new { t.WholesalerId, t.Order.Wholesaler!.BusinessName })
+                    .Where(t => t.Order?.Wholesaler?.BusinessName != null)
+                    .GroupBy(t => new { t.WholesalerId, BusinessName = t.Order.Wholesaler.BusinessName })
                     .Select(g => new { 
                         Name = g.Key.BusinessName, 
                         Revenue = g.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0),
@@ -149,7 +152,8 @@ namespace DFTRK.Controllers
                     .ToList();
 
                 var topRetailers = allTransactions
-                    .GroupBy(t => new { t.RetailerId, t.Order.Retailer!.BusinessName })
+                    .Where(t => t.Order?.Retailer?.BusinessName != null)
+                    .GroupBy(t => new { t.RetailerId, BusinessName = t.Order.Retailer.BusinessName })
                     .Select(g => new { 
                         Name = g.Key.BusinessName, 
                         Spent = g.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0),

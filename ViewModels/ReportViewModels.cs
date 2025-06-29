@@ -18,7 +18,57 @@ namespace DFTRK.ViewModels
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
     }
-    
+
+    // Monthly financial data for admin reports
+    public class MonthlyFinancialData
+    {
+        public string Period { get; set; } = string.Empty;
+        public decimal TransactionVolume { get; set; }
+        public decimal ActualRevenue { get; set; }
+        public decimal PlatformFees { get; set; }
+        public int TransactionCount { get; set; }
+    }
+
+    // Wholesaler top product item
+    public class WholesalerTopProduct
+    {
+        public string ProductName { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public int QuantitySold { get; set; }
+        public decimal Revenue { get; set; }
+        public int OrderCount { get; set; }
+    }
+
+    // Supplier option for dropdown (wholesaler or partner)
+    public class SupplierOption
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty; // "Wholesaler" or "Partner"
+        public string DisplayName => $"{Name} ({Type})";
+    }
+
+    // Retailer category spending item
+    public class RetailerCategorySpending
+    {
+        public string CategoryName { get; set; } = string.Empty;
+        public decimal TotalSpent { get; set; }
+        public int OrderCount { get; set; }
+        public int ProductCount { get; set; }
+    }
+
+    // Simple retailer purchases view model
+    public class RetailerPurchasesViewModel : BaseReportViewModel
+    {
+        public string? SupplierId { get; set; }
+        public List<Order> Orders { get; set; } = new List<Order>();
+        public Dictionary<int, Transaction> TransactionLookup { get; set; } = new Dictionary<int, Transaction>();
+        public List<SupplierOption> Suppliers { get; set; } = new List<SupplierOption>();
+        public decimal TotalSpent { get; set; }
+        public decimal TotalPaid { get; set; }
+        public List<RetailerCategorySpending> SpendingByCategory { get; set; } = new List<RetailerCategorySpending>();
+    }
+
     // Sales report view model
     public class SalesReportViewModel : BaseReportViewModel
     {
@@ -304,21 +354,54 @@ namespace DFTRK.ViewModels
     // Financial report view model for Admin
     public class FinancialReportViewModel : BaseReportViewModel
     {
+        // Filter parameters
+        public string? RetailerFilter { get; set; }
+        public string? WholesalerFilter { get; set; }
+        
         // Summary metrics
         public decimal TotalTransactionVolume { get; set; }
         public decimal PlatformFees { get; set; }
         public decimal ActualRevenue { get; set; }
+        public decimal OutstandingAmount { get; set; }
         public decimal CollectionRate { get; set; } // Percentage of total volume collected
+        public int OrdersThisMonth { get; set; }
         
-        // Chart data
-        public List<ChartDataPoint> MonthlyTrendChart { get; set; } = new List<ChartDataPoint>();
-        public List<ChartDataPoint> MonthlyFeesChart { get; set; } = new List<ChartDataPoint>();
-        public List<ChartDataPoint> PaymentMethodChart { get; set; } = new List<ChartDataPoint>();
-        public List<ChartDataPoint> AgingChart { get; set; } = new List<ChartDataPoint>();
+        // Monthly trends data
+        public List<MonthlyFinancialData> MonthlyTrends { get; set; } = new List<MonthlyFinancialData>();
         
-        // Top performers
-        public List<TopRetailerFinancialItem> TopRetailersByVolume { get; set; } = new List<TopRetailerFinancialItem>();
-        public List<TopWholesalerFinancialItem> TopWholesalersByVolume { get; set; } = new List<TopWholesalerFinancialItem>();
+        // Business breakdown data
+        public List<RetailerFinancialBreakdown> RetailerBreakdowns { get; set; } = new List<RetailerFinancialBreakdown>();
+        public List<WholesalerFinancialBreakdown> WholesalerBreakdowns { get; set; } = new List<WholesalerFinancialBreakdown>();
+        
+        // Available filters
+        public List<dynamic> AvailableRetailers { get; set; } = new List<dynamic>();
+        public List<dynamic> AvailableWholesalers { get; set; } = new List<dynamic>();
+    }
+
+    public class RetailerFinancialBreakdown
+    {
+        public string RetailerId { get; set; } = string.Empty;
+        public string RetailerName { get; set; } = string.Empty;
+        public int OrderCount { get; set; }
+        public decimal TransactionVolume { get; set; }
+        public decimal PlatformFees { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public decimal CollectionRate { get; set; }
+        public string Type { get; set; } = "Retailer"; // "Retailer" or "External"
+    }
+
+    public class WholesalerFinancialBreakdown
+    {
+        public string WholesalerId { get; set; } = string.Empty;
+        public string WholesalerName { get; set; } = string.Empty;
+        public int OrderCount { get; set; }
+        public decimal TransactionVolume { get; set; }
+        public decimal PlatformFees { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public decimal CollectionRate { get; set; }
+        public string Type { get; set; } = "Wholesaler"; // "Wholesaler" or "Partner"
     }
     
     // Financial-specific retailer item
@@ -666,7 +749,7 @@ namespace DFTRK.ViewModels
         
         // Filter properties
         public string? RetailerFilter { get; set; }
-        public List<RetailerFilterItem> AvailableRetailers { get; set; } = new List<RetailerFilterItem>();
+        public List<dynamic> AvailableRetailers { get; set; } = new List<dynamic>();
         
         // Summary metrics
         public decimal TotalSales { get; set; }
@@ -676,8 +759,9 @@ namespace DFTRK.ViewModels
         public int PaidOrders { get; set; }
         public int UnpaidOrders { get; set; }
         
-        // Simple sales list
-        public List<SimpleSalesItem> Sales { get; set; } = new List<SimpleSalesItem>();
+        // Data
+        public List<WholesalerSaleItem> Sales { get; set; } = new List<WholesalerSaleItem>();
+        public List<WholesalerTopProduct> TopProducts { get; set; } = new List<WholesalerTopProduct>();
     }
 
     public class RetailerFilterItem
@@ -698,5 +782,19 @@ namespace DFTRK.ViewModels
         public OrderStatus Status { get; set; }
         public string PaymentStatus { get; set; } = string.Empty; // "Paid", "Partial", "Unpaid"
         public bool IsExternal { get; set; } // True if external retailer
+    }
+
+    // Wholesaler sale item for sales outstanding report
+    public class WholesalerSaleItem
+    {
+        public int OrderId { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string CustomerName { get; set; } = string.Empty;
+        public decimal OrderTotal { get; set; }
+        public decimal AmountPaid { get; set; }
+        public decimal Outstanding { get; set; }
+        public OrderStatus Status { get; set; }
+        public string PaymentStatus { get; set; } = string.Empty; // "Paid", "Partial", "Unpaid"
+        public bool IsExternal { get; set; }
     }
 } 

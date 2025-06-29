@@ -402,7 +402,6 @@ namespace DFTRK.Controllers
             }
 
             var order = await _context.Orders
-                .Include(o => o.Transaction)
                 .FirstOrDefaultAsync(o => o.Id == id && o.RetailerId == user.Id && o.Status == OrderStatus.Delivered);
 
             if (order == null)
@@ -415,20 +414,23 @@ namespace DFTRK.Controllers
             _context.Update(order);
 
             // Update transaction status if exists and payment is complete
-            if (order.Transaction != null)
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                
+            if (transaction != null)
             {
                 // Only mark as completed if fully paid
-                if (order.Transaction.AmountPaid >= order.Transaction.Amount)
+                if (transaction.AmountPaid >= transaction.Amount)
                 {
-                    order.Transaction.Status = TransactionStatus.Completed;
+                    transaction.Status = TransactionStatus.Completed;
                 }
-                else if (order.Transaction.AmountPaid > 0)
+                else if (transaction.AmountPaid > 0)
                 {
-                    order.Transaction.Status = TransactionStatus.PartiallyPaid;
+                    transaction.Status = TransactionStatus.PartiallyPaid;
                 }
                 // Otherwise, leave as Pending
                 
-                _context.Update(order.Transaction);
+                _context.Update(transaction);
             }
 
             await _context.SaveChangesAsync();
@@ -453,7 +455,6 @@ namespace DFTRK.Controllers
             }
 
             var order = await _context.Orders
-                .Include(o => o.Transaction)
                 .Include(o => o.Items)
                 .ThenInclude(oi => oi.WholesalerProduct)
                 .FirstOrDefaultAsync(o => o.Id == id && o.RetailerId == user.Id && 
@@ -489,10 +490,13 @@ namespace DFTRK.Controllers
             }
 
             // Update transaction status if exists
-            if (order.Transaction != null)
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                
+            if (transaction != null)
             {
-                order.Transaction.Status = TransactionStatus.Refunded;
-                _context.Update(order.Transaction);
+                transaction.Status = TransactionStatus.Refunded;
+                _context.Update(transaction);
             }
 
             await _context.SaveChangesAsync();
@@ -528,7 +532,6 @@ namespace DFTRK.Controllers
             }
 
             var order = await _context.Orders
-                .Include(o => o.Transaction)
                 .Include(o => o.Items)
                 .ThenInclude(oi => oi.WholesalerProduct)
                 .FirstOrDefaultAsync(o => o.Id == id && o.WholesalerId == user.Id && 
@@ -561,10 +564,13 @@ namespace DFTRK.Controllers
             }
 
             // Update transaction status if exists
-            if (order.Transaction != null)
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                
+            if (transaction != null)
             {
-                order.Transaction.Status = TransactionStatus.Refunded;
-                _context.Update(order.Transaction);
+                transaction.Status = TransactionStatus.Refunded;
+                _context.Update(transaction);
             }
 
             await _context.SaveChangesAsync();
@@ -593,7 +599,6 @@ namespace DFTRK.Controllers
             }
 
             var order = await _context.Orders
-                .Include(o => o.Transaction)
                 .FirstOrDefaultAsync(o => o.Id == id && o.RetailerId == user.Id);
 
             if (order == null)
@@ -601,14 +606,17 @@ namespace DFTRK.Controllers
                 return NotFound();
             }
 
-            if (order.Transaction == null)
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.OrderId == order.Id);
+
+            if (transaction == null)
             {
                 TempData["Error"] = "No transaction found for this order.";
                 return RedirectToAction(nameof(Details), new { id = order.Id });
             }
 
             // Redirect directly to the MakePayment action in PaymentsController
-            return RedirectToAction("MakePayment", "Payments", new { id = order.Transaction.Id });
+            return RedirectToAction("MakePayment", "Payments", new { id = transaction.Id });
         }
 
         #region Partnership Order Management
@@ -630,7 +638,6 @@ namespace DFTRK.Controllers
 
             var order = await _context.Orders
                 .Include(o => o.Items)
-                .Include(o => o.Transaction)
                 .FirstOrDefaultAsync(o => o.Id == id && 
                                          o.RetailerId == user.Id && 
                                          o.WholesalerId == null && // Partnership order
@@ -711,20 +718,23 @@ namespace DFTRK.Controllers
             }
 
             // Update transaction status if exists
-            if (order.Transaction != null)
+            var transaction = await _context.Transactions
+                .FirstOrDefaultAsync(t => t.OrderId == order.Id);
+                
+            if (transaction != null)
             {
                 // Only mark as completed if fully paid
-                if (order.Transaction.AmountPaid >= order.Transaction.Amount)
+                if (transaction.AmountPaid >= transaction.Amount)
                 {
-                    order.Transaction.Status = TransactionStatus.Completed;
+                    transaction.Status = TransactionStatus.Completed;
                 }
-                else if (order.Transaction.AmountPaid > 0)
+                else if (transaction.AmountPaid > 0)
                 {
-                    order.Transaction.Status = TransactionStatus.PartiallyPaid;
+                    transaction.Status = TransactionStatus.PartiallyPaid;
                 }
                 // Otherwise, leave as Pending
                 
-                _context.Update(order.Transaction);
+                _context.Update(transaction);
             }
 
             await _context.SaveChangesAsync();

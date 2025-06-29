@@ -6,169 +6,293 @@
 <div class="container-fluid mt-4">
     <h1 class="mb-4">Financial Performance Report</h1>
     
-    <!-- Date Range Filter -->
+    <!-- Enhanced Filter Section -->
     <div class="card mb-4">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-2">
                     <label for="startDate" class="form-label">Start Date</label>
                     <input type="date" class="form-control" id="startDate" name="startDate" value="@Model.StartDate.ToString("yyyy-MM-dd")">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                     <label for="endDate" class="form-label">End Date</label>
                     <input type="date" class="form-control" id="endDate" name="endDate" value="@Model.EndDate.ToString("yyyy-MM-dd")">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label for="retailerFilter" class="form-label">Retailer Filter</label>
+                    <select class="form-select" id="retailerFilter" name="retailerFilter">
+                        <option value="">All Retailers</option>
+                        @foreach (var retailer in Model.AvailableRetailers)
+                        {
+                            <option value="@retailer.Id" selected="@(Model.RetailerFilter == retailer.Id)">
+                                @retailer.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="wholesalerFilter" class="form-label">Wholesaler Filter</label>
+                    <select class="form-select" id="wholesalerFilter" name="wholesalerFilter">
+                        <option value="">All Wholesalers</option>
+                        @foreach (var wholesaler in Model.AvailableWholesalers)
+                        {
+                            <option value="@wholesaler.Id" selected="@(Model.WholesalerFilter == wholesaler.Id)">
+                                @wholesaler.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-primary w-100">Apply Filters</button>
+                </div>
+                <div class="col-md-1">
+                    <a href="@Url.Action("Financial", "Reports")" class="btn btn-secondary w-100">Clear Filters</a>
                 </div>
             </form>
         </div>
     </div>
     
-    <!-- Financial Summary Cards -->
-    <div class="row mb-4">
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card bg-primary text-white h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Transaction Volume</h5>
-                    <h2 class="display-6">$@Model.TotalTransactionVolume.ToString("N2")</h2>
-                    <p class="card-text">Total value of all transactions</p>
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4>$@Model.TotalTransactionVolume.ToString("N0")</h4>
+                    <small>Total Transaction Volume</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-success text-white h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Platform Fees</h5>
-                    <h2 class="display-6">$@Model.PlatformFees.ToString("N2")</h2>
-                    <p class="card-text">Revenue from 0.1% transaction fee</p>
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h4>$@Model.ActualRevenue.ToString("N0")</h4>
+                    <small>Revenue Collected</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-info text-white h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Actual Revenue</h5>
-                    <h2 class="display-6">$@Model.ActualRevenue.ToString("N2")</h2>
-                    <p class="card-text">Amount actually collected</p>
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h4>$@Model.OutstandingAmount.ToString("N0")</h4>
+                    <small>Outstanding Amount</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-warning text-dark h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Collection Rate</h5>
-                    <h2 class="display-6">@Model.CollectionRate.ToString("N1")%</h2>
-                    <p class="card-text">Percentage of total volume collected</p>
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h4>@Model.OrdersThisMonth</h4>
+                    <small>Orders This Month</small>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Monthly Trends Chart -->
-    <div class="row mb-4">
+
+    
+    <!-- Platform Fee Metrics -->
+    <div class="row g-3 mb-4">
         <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Monthly Transaction Volume</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="monthlyTrendChart" height="300"></canvas>
+            <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                    <h4>$@Model.PlatformFees.ToString("N2")</h4>
+                    <small>Platform Fees (0.1%)</small>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Monthly Platform Fees</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="monthlyFeesChart" height="300"></canvas>
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4>@Model.CollectionRate.ToString("F1")%</h4>
+                    <small>Collection Rate</small>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Payment Method and Aging Analysis -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">Payment Method Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="paymentMethodChart" height="300"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">Accounts Receivable Aging</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="agingChart" height="300"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Top Retailers Table -->
-    <div class="card mb-4">
+    <!-- Retailer Fee Breakdown -->
+    @if (Model.RetailerBreakdowns.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Top Retailers by Transaction Volume</h5>
+                        <h5><i class="fas fa-store"></i> Platform Fees by Retailer</h5>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-striped table-hover">
+                            <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>Retailer ID</th>
-                            <th>Transaction Count</th>
-                            <th>Transaction Volume</th>
-                            <th>Platform Fees</th>
+                                        <th>Retailer</th>
+                                        <th class="text-end">Orders</th>
+                                        <th class="text-end">Transaction Volume</th>
+                                        <th class="text-end">Platform Fees</th>
+                                        <th class="text-end">Amount Paid</th>
+                                        <th class="text-end">Outstanding</th>
+                                        <th class="text-end">Collection Rate</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var retailer in Model.TopRetailersByVolume)
+                                    @foreach (var retailer in Model.RetailerBreakdowns)
                         {
                             <tr>
-                                <td>@retailer.RetailerId</td>
-                                <td>@retailer.TransactionCount</td>
-                                <td>$@retailer.TransactionVolume.ToString("N2")</td>
-                                <td>$@retailer.PlatformFees.ToString("N2")</td>
+                                            <td><strong>@retailer.RetailerName</strong></td>
+                                            <td class="text-end">@retailer.OrderCount</td>
+                                            <td class="text-end">$@retailer.TransactionVolume.ToString("N2")</td>
+                                            <td class="text-end text-success">
+                                                <strong>$@retailer.PlatformFees.ToString("N2")</strong>
+                                            </td>
+                                            <td class="text-end">$@retailer.AmountPaid.ToString("N2")</td>
+                                            <td class="text-end text-@(retailer.Outstanding > 0 ? "danger" : "success")">
+                                                $@retailer.Outstanding.ToString("N2")
+                                            </td>
+                                            <td class="text-end">
+                                                <span class="badge bg-@(retailer.CollectionRate >= 80 ? "success" : retailer.CollectionRate >= 60 ? "warning" : "danger")">
+                                                    @retailer.CollectionRate.ToString("F1")%
+                                                </span>
+                                            </td>
                             </tr>
                         }
                     </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th>Total</th>
+                                        <th class="text-end">@Model.RetailerBreakdowns.Sum(r => r.OrderCount)</th>
+                                        <th class="text-end">$@Model.RetailerBreakdowns.Sum(r => r.TransactionVolume).ToString("N2")</th>
+                                        <th class="text-end text-success"><strong>$@Model.RetailerBreakdowns.Sum(r => r.PlatformFees).ToString("N2")</strong></th>
+                                        <th class="text-end">$@Model.RetailerBreakdowns.Sum(r => r.AmountPaid).ToString("N2")</th>
+                                        <th class="text-end">$@Model.RetailerBreakdowns.Sum(r => r.Outstanding).ToString("N2")</th>
+                                        <th class="text-end">
+                                            @{
+                                                var totalVolume = Model.RetailerBreakdowns.Sum(r => r.TransactionVolume);
+                                                var totalPaid = Model.RetailerBreakdowns.Sum(r => r.AmountPaid);
+                                                var totalCollectionRate = totalVolume > 0 ? (totalPaid / totalVolume) * 100 : 0;
+                                            }
+                                            <span class="badge bg-@(totalCollectionRate >= 80 ? "success" : totalCollectionRate >= 60 ? "warning" : "danger")">
+                                                @totalCollectionRate.ToString("F1")%
+                                            </span>
+                                        </th>
+                                    </tr>
+                                </tfoot>
                 </table>
             </div>
         </div>
     </div>
-    
-    <!-- Top Wholesalers Table -->
-    <div class="card mb-4">
+            </div>
+        </div>
+    }
+
+    <!-- Wholesaler Fee Breakdown -->
+    @if (Model.WholesalerBreakdowns.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
         <div class="card-header bg-success text-white">
-            <h5 class="mb-0">Top Wholesalers by Transaction Volume</h5>
+                        <h5><i class="fas fa-warehouse"></i> Platform Fees by Wholesaler</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Wholesaler</th>
+                                        <th class="text-end">Orders</th>
+                                        <th class="text-end">Transaction Volume</th>
+                                        <th class="text-end">Platform Fees</th>
+                                        <th class="text-end">Amount Paid</th>
+                                        <th class="text-end">Outstanding</th>
+                                        <th class="text-end">Collection Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var wholesaler in Model.WholesalerBreakdowns)
+                                    {
+                                        <tr>
+                                            <td><strong>@wholesaler.WholesalerName</strong></td>
+                                            <td class="text-end">@wholesaler.OrderCount</td>
+                                            <td class="text-end">$@wholesaler.TransactionVolume.ToString("N2")</td>
+                                            <td class="text-end text-success">
+                                                <strong>$@wholesaler.PlatformFees.ToString("N2")</strong>
+                                            </td>
+                                            <td class="text-end">$@wholesaler.AmountPaid.ToString("N2")</td>
+                                            <td class="text-end text-@(wholesaler.Outstanding > 0 ? "danger" : "success")">
+                                                $@wholesaler.Outstanding.ToString("N2")
+                                            </td>
+                                            <td class="text-end">
+                                                <span class="badge bg-@(wholesaler.CollectionRate >= 80 ? "success" : wholesaler.CollectionRate >= 60 ? "warning" : "danger")">
+                                                    @wholesaler.CollectionRate.ToString("F1")%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th>Total</th>
+                                        <th class="text-end">@Model.WholesalerBreakdowns.Sum(w => w.OrderCount)</th>
+                                        <th class="text-end">$@Model.WholesalerBreakdowns.Sum(w => w.TransactionVolume).ToString("N2")</th>
+                                        <th class="text-end text-success"><strong>$@Model.WholesalerBreakdowns.Sum(w => w.PlatformFees).ToString("N2")</strong></th>
+                                        <th class="text-end">$@Model.WholesalerBreakdowns.Sum(w => w.AmountPaid).ToString("N2")</th>
+                                        <th class="text-end">$@Model.WholesalerBreakdowns.Sum(w => w.Outstanding).ToString("N2")</th>
+                                        <th class="text-end">
+                                            @{
+                                                var totalVolume = Model.WholesalerBreakdowns.Sum(w => w.TransactionVolume);
+                                                var totalPaid = Model.WholesalerBreakdowns.Sum(w => w.AmountPaid);
+                                                var totalCollectionRate = totalVolume > 0 ? (totalPaid / totalVolume) * 100 : 0;
+                                            }
+                                            <span class="badge bg-@(totalCollectionRate >= 80 ? "success" : totalCollectionRate >= 60 ? "warning" : "danger")">
+                                                @totalCollectionRate.ToString("F1")%
+                                            </span>
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    
+    <!-- Monthly Trends Section -->
+    @if (Model.MonthlyTrends.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5><i class="fas fa-chart-line"></i> Monthly Financial Trends</h5>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-striped table-hover">
+                            <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>Wholesaler ID</th>
-                            <th>Transaction Count</th>
-                            <th>Transaction Volume</th>
-                            <th>Platform Fees</th>
+                                        <th>Period</th>
+                                        <th class="text-end">Transaction Volume</th>
+                                        <th class="text-end">Revenue Collected</th>
+                                        <th class="text-end">Platform Fees</th>
+                                        <th class="text-end">Transactions</th>
+                                        <th class="text-end">Collection Rate</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var wholesaler in Model.TopWholesalersByVolume)
-                        {
-                            <tr>
-                                <td>@wholesaler.WholesalerId</td>
-                                <td>@wholesaler.TransactionCount</td>
-                                <td>$@wholesaler.TransactionVolume.ToString("N2")</td>
-                                <td>$@wholesaler.PlatformFees.ToString("N2")</td>
+                                    @foreach (var month in Model.MonthlyTrends.OrderByDescending(m => m.Period))
+                                    {
+                                        var collectionRate = month.TransactionVolume > 0 ? (month.ActualRevenue / month.TransactionVolume) * 100 : 0;
+                                        <tr>
+                                            <td><strong>@DateTime.ParseExact(month.Period, "yyyy-MM", null).ToString("MMM yyyy")</strong></td>
+                                            <td class="text-end">$@month.TransactionVolume.ToString("N2")</td>
+                                            <td class="text-end text-success">$@month.ActualRevenue.ToString("N2")</td>
+                                            <td class="text-end text-info"><strong>$@month.PlatformFees.ToString("N2")</strong></td>
+                                            <td class="text-end">@month.TransactionCount</td>
+                                            <td class="text-end">
+                                                <span class="badge bg-@(collectionRate >= 80 ? "success" : collectionRate >= 60 ? "warning" : "danger")">
+                                                    @collectionRate.ToString("F1")%
+                                                </span>
+                                            </td>
                             </tr>
                         }
                     </tbody>
@@ -177,136 +301,13 @@
         </div>
     </div>
 </div>
+        </div>
+    }
 
-@section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Monthly Trend Chart
-        const monthlyTrendCtx = document.getElementById('monthlyTrendChart').getContext('2d');
-        new Chart(monthlyTrendCtx, {
-            type: 'bar',
-            data: {
-                labels: [@Html.Raw(string.Join(",", Model.MonthlyTrendChart.Select(c => $"'{c.Label}'")))],
-                datasets: [{
-                    label: 'Transaction Volume',
-                    data: [@string.Join(",", Model.MonthlyTrendChart.Select(c => c.Value))],
-                    backgroundColor: 'rgba(13, 110, 253, 0.7)',
-                    borderColor: 'rgba(13, 110, 253, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Monthly Fees Chart
-        const monthlyFeesCtx = document.getElementById('monthlyFeesChart').getContext('2d');
-        new Chart(monthlyFeesCtx, {
-            type: 'bar',
-            data: {
-                labels: [@Html.Raw(string.Join(",", Model.MonthlyFeesChart.Select(c => $"'{c.Label}'")))],
-                datasets: [{
-                    label: 'Platform Fees',
-                    data: [@string.Join(",", Model.MonthlyFeesChart.Select(c => c.Value))],
-                    backgroundColor: 'rgba(25, 135, 84, 0.7)',
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Payment Method Chart
-        const paymentMethodCtx = document.getElementById('paymentMethodChart').getContext('2d');
-        new Chart(paymentMethodCtx, {
-            type: 'pie',
-            data: {
-                labels: [@Html.Raw(string.Join(",", Model.PaymentMethodChart.Select(c => $"'{c.Label}'")))],
-                datasets: [{
-                    data: [@string.Join(",", Model.PaymentMethodChart.Select(c => c.Value))],
-                    backgroundColor: [
-                        'rgba(13, 110, 253, 0.7)',
-                        'rgba(25, 135, 84, 0.7)',
-                        'rgba(13, 202, 240, 0.7)',
-                        'rgba(255, 193, 7, 0.7)',
-                        'rgba(220, 53, 69, 0.7)'
-                    ],
-                    borderColor: [
-                        'rgba(13, 110, 253, 1)',
-                        'rgba(25, 135, 84, 1)',
-                        'rgba(13, 202, 240, 1)',
-                        'rgba(255, 193, 7, 1)',
-                        'rgba(220, 53, 69, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.label || '';
-                                let value = context.raw || 0;
-                                return label + ': $' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Aging Chart
-        const agingCtx = document.getElementById('agingChart').getContext('2d');
-        new Chart(agingCtx, {
-            type: 'bar',
-            data: {
-                labels: [@Html.Raw(string.Join(",", Model.AgingChart.Select(c => $"'{c.Label}'")))],
-                datasets: [{
-                    label: 'Outstanding Amount',
-                    data: [@string.Join(",", Model.AgingChart.Select(c => c.Value))],
-                    backgroundColor: 'rgba(255, 193, 7, 0.7)',
-                    borderColor: 'rgba(255, 193, 7, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toLocaleString();
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    </script>
-} 
+    <div class="text-muted text-center">
+        <small>
+            <strong>Platform Fee Policy:</strong> 0.1% fee rate applies to ALL orders on the platform.
+            <br>Partners are wholesalers, External customers are retailers - all orders involve registered users and generate platform revenue.
+        </small>
+    </div>
+</div> 

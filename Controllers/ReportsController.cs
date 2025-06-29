@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Linq;
 
 namespace DFTRK.Controllers
 {
@@ -23,2733 +22,720 @@ namespace DFTRK.Controllers
             _userManager = userManager;
         }
 
-        // GET: Reports
+        // Main reports index
         public IActionResult Index()
         {
             return View();
         }
 
-        // GET: Reports/WholesalerIndex - Reports dashboard for Wholesalers
+        // Wholesaler reports index
         [Authorize(Roles = "Wholesaler")]
         public IActionResult WholesalerIndex()
         {
-            return View();
+            return RedirectToAction("WholesalerSalesOutstanding");
         }
 
-        // GET: Reports/WholesalerSalesOutstanding - Simple Sales and Outstanding report for Wholesalers
+        // Simple wholesaler sales and outstanding report
         [Authorize(Roles = "Wholesaler")]
-        public async Task<IActionResult> WholesalerSalesOutstanding(DateTime? startDate, DateTime? endDate, string? retailerFilter = null)
+        public async Task<IActionResult> WholesalerSalesOutstanding(DateTime? startDate, DateTime? endDate, string? customerFilter = null)
         {
-            // Default to current month if no dates provided
             startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1); // Include all of the end date
+            endDate ??= DateTime.UtcNow.Date.AddDays(1); // End of today (start of tomorrow)
+
+            // Ensure we get the full day for user-selected end dates
+            if (endDate.HasValue && endDate.Value.TimeOfDay == TimeSpan.Zero)
+            {
+                endDate = endDate.Value.AddDays(1); // Include entire end date
+            }
 
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return NotFound();
 
-            // Get all orders for this wholesaler within the date range
-            var ordersQuery = _context.Orders
+            var allOrders = await _context.Orders
                 .Include(o => o.Retailer)
+                .Include(o => o.Items)
+                    .ThenInclude(oi => oi.WholesalerProduct)
+                        .ThenInclude(wp => wp.Product)
+                            .ThenInclude(p => p.Category)
                 .Where(o => o.WholesalerId == user.Id && 
                            o.OrderDate >= startDate && 
-                           o.OrderDate <= endDate &&
-                           o.Status != OrderStatus.Cancelled);
+                           o.OrderDate < endDate &&  // Use < instead of <= for cleaner boundary logic
+                           o.Status != OrderStatus.Cancelled)
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
 
-            // Apply retailer filter if specified
-            if (!string.IsNullOrEmpty(retailerFilter))
-            {
-                if (retailerFilter.StartsWith("external_"))
-                {
-                    // Filter for specific external retailer by name
-                    var externalRetailerName = retailerFilter.Replace("external_", "").Replace("_", " ");
-                    ordersQuery = ordersQuery.Where(o => o.RetailerId == null && 
-                                                    o.Notes != null && 
-                                                    o.Notes.StartsWith("External Order for: " + externalRetailerName));
-                }
-                else
-                {
-                    // Filter for specific regular retailer
-                    ordersQuery = ordersQuery.Where(o => o.RetailerId == retailerFilter);
-                }
-            }
-
-            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
-
-            // Get all transactions for these orders with current payment data
-            var orderIds = orders.Select(o => o.Id).ToList();
+            var orderIds = allOrders.Select(o => o.Id).ToList();
             var transactions = await _context.Transactions
                 .Include(t => t.Payments)
                 .Where(t => orderIds.Contains(t.OrderId))
                 .ToListAsync();
 
-            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
-            var transactionLookup = transactions
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.First());
+            var transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
 
-            // Create missing transactions for orders that don't have them
-            var ordersNeedingTransactions = orders.Where(o => !transactionLookup.ContainsKey(o.Id)).ToList();
-            foreach (var order in ordersNeedingTransactions)
+            // Apply customer filter after loading (to handle both retailer IDs and external customer names)
+            var orders = allOrders;
+            if (!string.IsNullOrEmpty(customerFilter))
             {
-                var newTransaction = new Transaction
+                if (customerFilter.StartsWith("EXTERNAL:"))
                 {
-                    OrderId = order.Id,
-                    Amount = order.TotalAmount,
-                    AmountPaid = 0,
-                    TransactionDate = order.OrderDate,
-                    RetailerId = order.RetailerId, // Can be null for external orders
-                    WholesalerId = order.WholesalerId,
-                    Status = TransactionStatus.Pending
-                };
-                _context.Transactions.Add(newTransaction);
-                transactionLookup[order.Id] = newTransaction;
-            }
-
-            if (ordersNeedingTransactions.Any())
-            {
-                await _context.SaveChangesAsync();
-                
-                // Reload transactions to get IDs for the new ones
-                var newTransactions = await _context.Transactions
-                    .Include(t => t.Payments)
-                    .Where(t => ordersNeedingTransactions.Select(o => o.Id).Contains(t.OrderId))
-                    .ToListAsync();
-                
-                // Update lookup with reloaded transactions
-                foreach (var transaction in newTransactions)
-                {
-                    transactionLookup[transaction.OrderId] = transaction;
-                }
-            }
-
-            // Update AmountPaid for all transactions to ensure accuracy
-            foreach (var transaction in transactionLookup.Values)
-            {
-                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                if (transaction.AmountPaid != actualAmountPaid)
-                {
-                    transaction.AmountPaid = actualAmountPaid;
-                    
-                    // Update transaction status
-                    if (transaction.AmountPaid >= transaction.Amount)
-                    {
-                        transaction.Status = TransactionStatus.Completed;
-                    }
-                    else if (transaction.AmountPaid > 0)
-                    {
-                        transaction.Status = TransactionStatus.PartiallyPaid;
-                    }
-                    else
-                    {
-                        transaction.Status = TransactionStatus.Pending;
-                    }
-                    
-                    _context.Update(transaction);
-                }
-            }
-            await _context.SaveChangesAsync();
-
-            // Get available retailers for filter dropdown
-            var availableRetailers = new List<RetailerFilterItem>();
-            
-            // Add regular retailers who have orders with this wholesaler
-            var regularRetailers = await _context.Orders
-                .Where(o => o.WholesalerId == user.Id && o.RetailerId != null)
-                .Include(o => o.Retailer)
-                .Select(o => o.Retailer)
-                .Distinct()
-                .ToListAsync();
-
-            foreach (var retailer in regularRetailers.Where(r => r != null))
-            {
-                availableRetailers.Add(new RetailerFilterItem
-                {
-                    Id = retailer.Id,
-                    Name = retailer.BusinessName ?? retailer.UserName ?? "Unknown",
-                    IsExternal = false
-                });
-            }
-
-            // Add individual external retailers who have orders with this wholesaler
-            var externalOrders = orders.Where(o => o.RetailerId == null).ToList();
-            var uniqueExternalRetailers = new Dictionary<string, string>(); // Key: external retailer name, Value: filter ID
-
-            foreach (var order in externalOrders)
-            {
-                if (!string.IsNullOrEmpty(order.Notes) && order.Notes.StartsWith("External Order for: "))
-                {
-                    var name = order.Notes.Replace("External Order for: ", "").Split('\n')[0];
-                    if (!string.IsNullOrEmpty(name) && !uniqueExternalRetailers.ContainsKey(name))
-                    {
-                        // Use "external_" prefix + name as the filter ID for external retailers
-                        uniqueExternalRetailers[name] = $"external_{name.Replace(" ", "_")}";
-                    }
-                }
-            }
-
-            // Add external retailers to the filter list
-            foreach (var externalRetailer in uniqueExternalRetailers)
-            {
-                availableRetailers.Add(new RetailerFilterItem
-                {
-                    Id = externalRetailer.Value, // external_[name]
-                    Name = externalRetailer.Key,  // actual name
-                    IsExternal = true
-                });
-            }
-
-            // Convert to simple sales items using verified payment data
-            var salesItems = orders.Select(o => {
-                // Use the verified transaction data for accurate payments
-                var amountPaid = transactionLookup.ContainsKey(o.Id) 
-                    ? transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0
-                    : 0;
-                var outstanding = o.TotalAmount - amountPaid;
-                
-                var paymentStatus = amountPaid >= o.TotalAmount ? "Paid" :
-                                   amountPaid > 0 ? "Partial" : "Unpaid";
-
-                // Extract customer name
-                string customerName = "Unknown";
-                if (o.RetailerId == null)
-                {
-                    // External order - extract name from notes
-                    if (!string.IsNullOrEmpty(o.Notes) && o.Notes.StartsWith("External Order for: "))
-                    {
-                        customerName = o.Notes.Replace("External Order for: ", "").Split('\n')[0];
-                    }
-                    else
-                    {
-                        customerName = "External Customer";
-                    }
+                    // External customer filter: extract customer name and filter by external orders
+                    var customerName = customerFilter.Substring("EXTERNAL:".Length);
+                    orders = allOrders.Where(o => o.RetailerId == null && 
+                                             o.Notes != null && 
+                                             o.Notes.StartsWith($"External Order for: {customerName}"))
+                                   .ToList();
                 }
                 else
                 {
-                    // Regular retailer
-                    customerName = o.Retailer?.BusinessName ?? "Unknown";
+                    // Registered retailer filter: filter by RetailerId
+                    orders = allOrders.Where(o => o.RetailerId == customerFilter).ToList();
                 }
+            }
 
-                return new SimpleSalesItem
+            // Build customer list (both registered retailers and external customers)
+            var customers = new List<dynamic>();
+
+            // Add registered retailers
+            var retailerIds = allOrders
+                .Where(o => o.RetailerId != null)
+                .Select(o => o.RetailerId!)
+                .Distinct()
+                .ToList();
+
+            var retailers = await _context.Users
+                .Where(u => retailerIds.Contains(u.Id))
+                .ToListAsync();
+
+            customers.AddRange(retailers.Select(r => new { 
+                Id = r.Id, 
+                Name = r.BusinessName ?? r.UserName ?? "Unknown",
+                Type = "Retailer"
+            }));
+
+            // Add external customers (extract from external orders)
+            var externalOrders = allOrders
+                .Where(o => o.RetailerId == null && 
+                           o.Notes != null &&
+                           o.Notes.StartsWith("External Order for: "))
+                .ToList();
+
+            var externalCustomerNames = externalOrders
+                .Select(o => o.Notes!.Split('\n')[0].Replace("External Order for: ", "").Trim())
+                .Distinct()
+                .ToList();
+
+            customers.AddRange(externalCustomerNames.Select(name => new { 
+                Id = $"EXTERNAL:{name}", 
+                Name = name,
+                Type = "External"
+            }));
+
+            // Sort customers by type then by name
+            var availableCustomers = customers.OrderBy(c => c.Type).ThenBy(c => c.Name).ToList();
+
+            var totalSales = orders.Sum(o => o.TotalAmount);
+            var totalPaid = orders.Where(o => transactionLookup.ContainsKey(o.Id))
+                                 .Sum(o => transactionLookup[o.Id].AmountPaid);
+            var totalOutstanding = totalSales - totalPaid;
+            var paidOrders = orders.Count(o => transactionLookup.ContainsKey(o.Id) && 
+                                              transactionLookup[o.Id].AmountPaid >= o.TotalAmount);
+            var unpaidOrders = orders.Count - paidOrders;
+
+            // Calculate top products
+            var topProducts = orders
+                .SelectMany(o => o.Items ?? new List<OrderItem>())
+                .Where(i => i.WholesalerProduct?.Product != null)
+                .GroupBy(i => new { 
+                    ProductId = i.WholesalerProduct.Product.Id, 
+                    ProductName = i.WholesalerProduct.Product.Name,
+                    CategoryName = i.WholesalerProduct.Product.Category?.Name ?? "Uncategorized"
+                })
+                .Select(g => new WholesalerTopProduct
+                {
+                    ProductName = g.Key.ProductName,
+                    CategoryName = g.Key.CategoryName,
+                    QuantitySold = g.Sum(i => i.Quantity),
+                    Revenue = g.Sum(i => i.Subtotal),
+                    OrderCount = g.Select(i => i.OrderId).Distinct().Count()
+                })
+                .OrderByDescending(p => p.Revenue)
+                .Take(5)
+                .ToList();
+
+            var sales = orders.Select(o => {
+                var transaction = transactionLookup.ContainsKey(o.Id) ? transactionLookup[o.Id] : null;
+                var amountPaid = transaction?.AmountPaid ?? 0;
+                var outstanding = o.TotalAmount - amountPaid;
+                
+                return new WholesalerSaleItem
                 {
                     OrderId = o.Id,
                     OrderDate = o.OrderDate,
-                    CustomerName = customerName,
+                    CustomerName = o.RetailerId != null ? 
+                        (o.Retailer?.BusinessName ?? o.Retailer?.UserName ?? "Unknown") :
+                        (o.Notes?.StartsWith("External Order for: ") == true ?
+                            o.Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
+                            "External Customer"),
                     OrderTotal = o.TotalAmount,
                     AmountPaid = amountPaid,
                     Outstanding = outstanding,
                     Status = o.Status,
-                    PaymentStatus = paymentStatus,
+                    PaymentStatus = outstanding <= 0 ? "Paid" : 
+                                   amountPaid > 0 ? "Partial" : "Unpaid",
                     IsExternal = o.RetailerId == null
                 };
             }).ToList();
-
-            // Calculate summary metrics using verified payment data
-            var totalSales = salesItems.Sum(s => s.OrderTotal);
-            var totalPaid = salesItems.Sum(s => s.AmountPaid);
-            var totalOutstanding = salesItems.Sum(s => s.Outstanding);
-            var totalOrders = salesItems.Count;
-            var paidOrders = salesItems.Count(s => s.PaymentStatus == "Paid");
-            var unpaidOrders = salesItems.Count(s => s.PaymentStatus == "Unpaid");
 
             var viewModel = new WholesalerSalesOutstandingViewModel
             {
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
-                WholesalerId = user.Id,
-                WholesalerName = user.BusinessName ?? user.UserName ?? "Unknown",
-                RetailerFilter = retailerFilter,
-                AvailableRetailers = availableRetailers.OrderBy(r => r.Name).ToList(),
+                RetailerFilter = customerFilter,  // Keep same property name for backwards compatibility
                 TotalSales = totalSales,
                 TotalPaid = totalPaid,
                 TotalOutstanding = totalOutstanding,
-                TotalOrders = totalOrders,
+                TotalOrders = orders.Count,
                 PaidOrders = paidOrders,
                 UnpaidOrders = unpaidOrders,
-                Sales = salesItems
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/RetailerIndex - Reports dashboard for Retailers
-        [Authorize(Roles = "Retailer")]
-        public IActionResult RetailerIndex()
-        {
-            return View();
-        }
-
-        // GET: Reports/Financial - Financial performance report for Admin
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Financial(DateTime? startDate, DateTime? endDate)
-        {
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1); // Include all of the end date
-
-            // Get all transactions within the date range (exclude cancelled orders to match other reports)
-            var transactions = await _context.Transactions
-                .Include(t => t.Order)
-                .Include(t => t.Payments)
-                .Where(t => t.Order.OrderDate >= startDate && t.Order.OrderDate <= endDate &&
-                          t.Order.Status != OrderStatus.Cancelled) // Match Sales and Payments reports
-                .ToListAsync();
-
-            // Update transaction amounts to ensure consistency with other reports
-            foreach (var transaction in transactions)
-            {
-                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                if (transaction.AmountPaid != actualAmountPaid)
-                {
-                    transaction.AmountPaid = actualAmountPaid;
-                    _context.Update(transaction);
-                }
-            }
-            await _context.SaveChangesAsync();
-            
-            // Calculate platform fees (0.001 or 0.1% of transaction amount)
-            decimal totalTransactionVolume = transactions.Sum(t => t.Amount);
-            decimal platformFees = totalTransactionVolume * 0.001m;
-            decimal actualRevenue = transactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0); // Use actual payments like other reports
-            
-            // Calculate monthly breakdown for trend analysis (use Order.OrderDate for consistency)
-            var monthlyData = transactions
-                .GroupBy(t => new { Month = t.Order.OrderDate.Month, Year = t.Order.OrderDate.Year })
-                .Select(g => new
-                {
-                    Period = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    TransactionCount = g.Count(),
-                    Volume = g.Sum(t => t.Amount),
-                    Collected = g.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0), // Use actual payments
-                    PlatformFees = g.Sum(t => t.Amount) * 0.001m
-                })
-                .OrderBy(x => x.Period)
-                .ToList();
-
-            // Top retailers by transaction volume
-            var topRetailers = transactions
-                .GroupBy(t => t.RetailerId)
-                .Select(g => new
-                {
-                    RetailerId = g.Key,
-                    TransactionCount = g.Count(),
-                    Volume = g.Sum(t => t.Amount),
-                    Fees = g.Sum(t => t.Amount) * 0.001m
-                })
-                .OrderByDescending(r => r.Volume)
-                .Take(10)
-                .ToList();
-
-            // Top wholesalers by transaction volume
-            var topWholesalers = transactions
-                .GroupBy(t => t.WholesalerId)
-                .Select(g => new
-                {
-                    WholesalerId = g.Key,
-                    TransactionCount = g.Count(),
-                    Volume = g.Sum(t => t.Amount),
-                    Fees = g.Sum(t => t.Amount) * 0.001m
-                })
-                .OrderByDescending(w => w.Volume)
-                .Take(10)
-                .ToList();
-
-            // Calculate payment method distribution (use Order.OrderDate for consistency with other reports)
-            var paymentMethods = await _context.Payments
-                .Include(p => p.Transaction)
-                    .ThenInclude(t => t.Order)
-                .Where(p => p.Transaction.Order.OrderDate >= startDate && p.Transaction.Order.OrderDate <= endDate &&
-                          p.Transaction.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .GroupBy(p => p.Method)
-                .Select(g => new
-                {
-                    Method = g.Key.ToString(),
-                    Count = g.Count(),
-                    Amount = g.Sum(p => p.Amount)
-                })
-                .ToListAsync();
-
-            // Calculate accounts receivable aging (exclude cancelled orders for consistency)
-            var outstandingTransactions = await _context.Transactions
-                .Include(t => t.Order)
-                .Include(t => t.Payments)
-                .Where(t => t.Status != TransactionStatus.Completed &&
-                          t.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var agingBuckets = new Dictionary<string, decimal>
-            {
-                { "0-30 days", 0 },
-                { "31-60 days", 0 },
-                { "61-90 days", 0 },
-                { "90+ days", 0 }
-            };
-
-            foreach (var transaction in outstandingTransactions)
-            {
-                var daysOutstanding = (DateTime.UtcNow - transaction.Order.OrderDate).Days; // Use Order.OrderDate for consistency
-                var outstandingAmount = transaction.Amount - (transaction.Payments?.Sum(p => p.Amount) ?? 0); // Use actual payments
-
-                if (daysOutstanding <= 30)
-                    agingBuckets["0-30 days"] += outstandingAmount;
-                else if (daysOutstanding <= 60)
-                    agingBuckets["31-60 days"] += outstandingAmount;
-                else if (daysOutstanding <= 90)
-                    agingBuckets["61-90 days"] += outstandingAmount;
-                else
-                    agingBuckets["90+ days"] += outstandingAmount;
-            }
-
-            // Build the view model
-            var viewModel = new FinancialReportViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                TotalTransactionVolume = totalTransactionVolume,
-                PlatformFees = platformFees,
-                ActualRevenue = actualRevenue,
-                CollectionRate = totalTransactionVolume > 0 ? (actualRevenue / totalTransactionVolume) * 100 : 0,
-                
-                MonthlyTrendChart = monthlyData.Select(m => new ChartDataPoint
-                {
-                    Label = m.Period,
-                    Value = m.Volume,
-                    Count = m.TransactionCount
-                }).ToList(),
-                
-                MonthlyFeesChart = monthlyData.Select(m => new ChartDataPoint
-                {
-                    Label = m.Period,
-                    Value = m.PlatformFees,
-                    Count = m.TransactionCount
-                }).ToList(),
-                
-                PaymentMethodChart = paymentMethods.Select(p => new ChartDataPoint
-                {
-                    Label = p.Method,
-                    Value = p.Amount,
-                    Count = p.Count
-                }).ToList(),
-                
-                AgingChart = agingBuckets.Select(a => new ChartDataPoint
-                {
-                    Label = a.Key,
-                    Value = a.Value
-                }).ToList(),
-                
-                TopRetailersByVolume = topRetailers.Select(r => new TopRetailerFinancialItem
-                {
-                    RetailerId = r.RetailerId,
-                    TransactionCount = r.TransactionCount,
-                    TransactionVolume = r.Volume,
-                    PlatformFees = r.Fees
-                }).ToList(),
-                
-                TopWholesalersByVolume = topWholesalers.Select(w => new TopWholesalerFinancialItem
-                {
-                    WholesalerId = w.WholesalerId,
-                    TransactionCount = w.TransactionCount,
-                    TransactionVolume = w.Volume,
-                    PlatformFees = w.Fees
-                }).ToList()
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/Sales - Enhanced sales reports for Admin
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Sales(DateTime? startDate, DateTime? endDate, string retailerId = null, string wholesalerId = null, string status = null)
-        {
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1); // Include all of the end date
-
-            // Parse status filter if provided
-            OrderStatus? statusFilter = null;
-            if (!string.IsNullOrEmpty(status) && Enum.TryParse<OrderStatus>(status, out var parsedStatus))
-            {
-                statusFilter = parsedStatus;
-            }
-
-            // Get all retailers and wholesalers for filter dropdowns
-            var retailers = await _userManager.GetUsersInRoleAsync("Retailer");
-            var wholesalers = await _userManager.GetUsersInRoleAsync("Wholesaler");
-
-            // Start building query with all necessary includes
-            var query = _context.Orders
-                .Include(o => o.Retailer)
-                .Include(o => o.Wholesaler)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Include(o => o.Items)
-                    .ThenInclude(i => i.WholesalerProduct)
-                        .ThenInclude(wp => wp.Product)
-                .Where(o => o.OrderDate >= startDate && o.OrderDate <= endDate)
-                .Where(o => o.Status != OrderStatus.Cancelled); // Exclude cancelled orders from payment calculations
-
-            // Apply filters if provided
-            if (!string.IsNullOrEmpty(retailerId))
-            {
-                query = query.Where(o => o.RetailerId == retailerId);
-            }
-
-            if (!string.IsNullOrEmpty(wholesalerId))
-            {
-                query = query.Where(o => o.WholesalerId == wholesalerId);
-            }
-
-            if (statusFilter.HasValue)
-            {
-                query = query.Where(o => o.Status == statusFilter.Value);
-            }
-
-            // Execute query
-            var orders = await query
-                .OrderByDescending(o => o.OrderDate)
-                .ToListAsync();
-
-            // Reload transactions to ensure we have the latest data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
-                
-            // Create lookup dictionary for quick access - handle potential duplicates
-            var transactionLookup = transactions
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            // Fix transaction statuses in the database
-            bool hasChanges = false;
-            foreach (var transaction in transactions)
-            {
-                // Calculate the actual amount paid from the Payments collection
-                decimal actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                
-                // Update the AmountPaid field if it's incorrect
-                if (transaction.AmountPaid != actualAmountPaid)
-                {
-                    transaction.AmountPaid = actualAmountPaid;
-                    hasChanges = true;
-                }
-                
-                // Update transaction status based on actual payment
-                if (actualAmountPaid >= transaction.Amount && transaction.Status != TransactionStatus.Completed)
-                {
-                    transaction.Status = TransactionStatus.Completed;
-                    _context.Update(transaction);
-                    hasChanges = true;
-                }
-                else if (actualAmountPaid > 0 && actualAmountPaid < transaction.Amount && 
-                        transaction.Status == TransactionStatus.Pending)
-                {
-                    transaction.Status = TransactionStatus.PartiallyPaid;
-                    _context.Update(transaction);
-                    hasChanges = true;
-                }
-            }
-            
-            // Save any status changes to the database
-            if (hasChanges)
-            {
-                await _context.SaveChangesAsync();
-                
-                // Reload transactions after saving changes
-                transactions = await _context.Transactions
-                    .Include(t => t.Payments)
-                    .Where(t => orderIds.Contains(t.OrderId))
-                    .ToListAsync();
-                    
-                // Update the lookup dictionary
-                transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
-            }
-
-            // Calculate revenue metrics using transactions for consistency with other reports
-            decimal totalOrderValue = transactions.Sum(t => t.Amount); // Use Transaction.Amount instead of Order.TotalAmount
-            
-            // Calculate actual revenue from payments (consistent with Payments and Financial reports)
-            decimal actualRevenue = transactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
-            
-            // Calculate outstanding amount (both from same source now)
-            decimal outstandingAmount = totalOrderValue - actualRevenue;
-
-            // Group orders by status for chart data
-            var ordersByStatus = orders
-                .GroupBy(o => o.Status)
-                .Select(g => new
-                {
-                    Status = g.Key.ToString(),
-                    Count = g.Count(),
-                    Value = g.Sum(o => o.TotalAmount)
-                })
-                .ToList();
-
-            // Group by retailer for chart
-            var salesByRetailer = orders
-                .GroupBy(o => o.RetailerId)
-                .Select(g => new
-                {
-                    RetailerId = g.Key,
-                    RetailerName = g.Key == null ? 
-                        // External retailer - extract name from order notes
-                        (g.First().Notes?.StartsWith("External Order for: ") == true ?
-                            g.First().Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
-                            "External Customer") :
-                        // Regular retailer
-                        g.First().Retailer?.BusinessName ?? "Unknown",
-                    OrderCount = g.Count(),
-                    TotalAmount = g.Sum(o => o.TotalAmount),
-                    ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                    .Sum(o => transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0)
-                })
-                .OrderByDescending(r => r.TotalAmount)
-                .Take(10)
-                .ToList();
-
-            // Group by wholesaler for chart
-            var salesByWholesaler = orders
-                .GroupBy(o => o.WholesalerId)
-                .Select(g => new
-                {
-                    WholesalerId = g.Key,
-                    WholesalerName = g.First().Wholesaler?.BusinessName ?? "Unknown",
-                    OrderCount = g.Count(),
-                    TotalAmount = g.Sum(o => o.TotalAmount),
-                    ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                    .Sum(o => transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0)
-                })
-                .OrderByDescending(w => w.TotalAmount)
-                .Take(10)
-                .ToList();
-
-            // Group by day for daily sales chart
-            var dailySales = orders
-                .GroupBy(o => o.OrderDate.Date)
-                .Select(g => new
-                {
-                    Date = g.Key,
-                    Count = g.Count(),
-                    Value = g.Sum(o => o.TotalAmount),
-                    ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                    .Sum(o => transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0)
-                })
-                .OrderBy(d => d.Date)
-                .ToList();
-
-            // Get top products
-            var topProducts = orders
-                .SelectMany(o => o.Items ?? new List<OrderItem>())
-                .GroupBy(i => new { 
-                    ProductId = i.WholesalerProduct?.Product?.Id ?? 0, 
-                    Name = i.WholesalerProduct?.Product?.Name ?? "Unknown" 
-                })
-                .Select(g => new TopProductItem
-                {
-                    ProductId = g.Key.ProductId,
-                    ProductName = g.Key.Name,
-                    QuantitySold = g.Sum(i => i.Quantity),
-                    TotalRevenue = g.Sum(i => i.Subtotal)
-                })
-                .OrderByDescending(p => p.TotalRevenue)
-                .Take(10)
-                .ToList();
-
-            // Calculate order status counts
-            var pendingOrders = orders.Count(o => o.Status == OrderStatus.Pending);
-            var processingOrders = orders.Count(o => o.Status == OrderStatus.Processing);
-            var shippedOrders = orders.Count(o => o.Status == OrderStatus.Shipped);
-            var deliveredOrders = orders.Count(o => o.Status == OrderStatus.Delivered);
-            var completedOrders = orders.Count(o => o.Status == OrderStatus.Completed);
-            var cancelledOrders = orders.Count(o => o.Status == OrderStatus.Cancelled);
-
-            // Calculate payment status metrics
-            var fullyPaidOrders = orders.Count(o => o.Transaction != null && o.Transaction.AmountPaid >= o.Transaction.Amount);
-            var partiallyPaidOrders = orders.Count(o => o.Transaction != null && o.Transaction.AmountPaid > 0 && o.Transaction.AmountPaid < o.Transaction.Amount);
-            var unpaidOrders = orders.Count(o => o.Transaction == null || o.Transaction.AmountPaid == 0);
-            
-            // Payment collection rate
-            decimal collectionRate = totalOrderValue > 0 ? (actualRevenue / totalOrderValue) * 100 : 0;
-
-            // Build the enhanced view model
-            var viewModel = new SalesReportViewModel
-            {
-                // Dates and filters
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                RetailerId = retailerId,
-                WholesalerId = wholesalerId,
-                StatusFilter = statusFilter,
-                
-                // Collections for dropdowns
-                Orders = orders.Select(o => {
-                    // Update Transaction information with the latest data from our lookup
-                    if (o.Transaction == null && transactionLookup.ContainsKey(o.Id))
-                    {
-                        o.Transaction = transactionLookup[o.Id];
-                    }
-                    else if (o.Transaction != null && transactionLookup.ContainsKey(o.Id))
-                    {
-                        // Make sure we have the latest payment data
-                        o.Transaction.AmountPaid = transactionLookup[o.Id].AmountPaid;
-                        o.Transaction.Status = transactionLookup[o.Id].Status;
-                        o.Transaction.Payments = transactionLookup[o.Id].Payments;
-                    }
-                    return o;
-                }).ToList(),
-                Retailers = retailers,
-                Wholesalers = wholesalers,
-                
-                // Summary metrics
-                TotalOrders = orders.Count,
-                TotalSales = totalOrderValue,
-                ActualRevenue = actualRevenue,
-                OutstandingAmount = outstandingAmount,
-                CollectionRate = collectionRate,
-                
-                // Payment status counts
-                FullyPaidOrders = fullyPaidOrders,
-                PartiallyPaidOrders = partiallyPaidOrders,
-                UnpaidOrders = unpaidOrders,
-                
-                // Order status counts
-                PendingOrders = pendingOrders,
-                ProcessingOrders = processingOrders,
-                ShippedOrders = shippedOrders,
-                DeliveredOrders = deliveredOrders,
-                CompletedOrders = completedOrders,
-                CancelledOrders = cancelledOrders,
-                
-                // Chart data
-                OrdersByStatusChart = ordersByStatus.Select(o => new ChartDataPoint
-                {
-                    Label = o.Status,
-                    Value = o.Value,
-                    Count = o.Count
-                }).ToList(),
-                
-                SalesByRetailerChart = salesByRetailer.Select(r => new ChartDataPoint
-                {
-                    Label = r.RetailerName,
-                    Value = r.TotalAmount,
-                    Count = r.OrderCount,
-                    SecondaryValue = r.ActuallyPaid
-                }).ToList(),
-                
-                SalesByWholesalerChart = salesByWholesaler.Select(w => new ChartDataPoint
-                {
-                    Label = w.WholesalerName,
-                    Value = w.TotalAmount,
-                    Count = w.OrderCount,
-                    SecondaryValue = w.ActuallyPaid
-                }).ToList(),
-                
-                DailySalesChart = dailySales.Select(d => new ChartDataPoint
-                {
-                    Label = d.Date.ToString("MM/dd"),
-                    Value = d.Value,
-                    Count = d.Count,
-                    SecondaryValue = d.ActuallyPaid
-                }).ToList(),
-                
-                // Top performers
-                TopRetailers = salesByRetailer.Select(r => new TopRetailerItem
-                {
-                    RetailerId = r.RetailerId,
-                    RetailerName = r.RetailerName,
-                    OrderCount = r.OrderCount,
-                    TotalRevenue = r.TotalAmount,
-                    ActuallyPaid = r.ActuallyPaid
-                }).ToList(),
-                
-                TopWholesalers = salesByWholesaler.Select(w => new TopWholesalerItem
-                {
-                    WholesalerId = w.WholesalerId,
-                    WholesalerName = w.WholesalerName,
-                    OrderCount = w.OrderCount,
-                    TotalSpent = w.TotalAmount,
-                    ActuallyPaid = w.ActuallyPaid
-                }).ToList(),
-                
+                Sales = sales,
+                AvailableRetailers = availableCustomers,  // Now includes both retailers and external customers
                 TopProducts = topProducts
             };
 
             return View(viewModel);
         }
 
-        // GET: Reports/Payments - Enhanced payment reports for Admin
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Payments(DateTime? startDate, DateTime? endDate, string retailerId = null, string wholesalerId = null, string paymentMethod = null)
+        // Retailer reports index
+        [Authorize(Roles = "Retailer")]
+        public IActionResult RetailerIndex()
         {
-            // Default to current month if no dates provided
+            return RedirectToAction("RetailerPurchases");
+        }
+
+        // Enhanced financial report with retailer/wholesaler filtering
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Financial(DateTime? startDate, DateTime? endDate, string? retailerFilter, string? wholesalerFilter)
+        {
             startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1); // Include all of the end date
+            endDate ??= DateTime.UtcNow.Date.AddDays(1); // End of today (start of tomorrow)
 
-            // Get all retailers and wholesalers for filter dropdowns
-            var retailers = await _userManager.GetUsersInRoleAsync("Retailer");
-            var wholesalers = await _userManager.GetUsersInRoleAsync("Wholesaler");
-
-            // Build query with includes (exclude payments for cancelled orders)
-            // IMPORTANT: Use Order.OrderDate for consistency with Sales and Financial reports
-            var query = _context.Payments
-                .Include(p => p.Transaction)
-                    .ThenInclude(t => t.Order)
-                        .ThenInclude(o => o.Retailer)
-                .Include(p => p.Transaction)
-                    .ThenInclude(t => t.Order)
-                        .ThenInclude(o => o.Wholesaler)
-                .Include(p => p.Transaction)
-                    .ThenInclude(t => t.Order)
-                        .ThenInclude(o => o.Items)
-                .Where(p => p.Transaction.Order.OrderDate >= startDate && p.Transaction.Order.OrderDate <= endDate &&
-                          p.Transaction.Order.Status != OrderStatus.Cancelled); // Exclude payments for cancelled orders
-
-            // Apply filters if provided
-            if (!string.IsNullOrEmpty(retailerId))
+            // Ensure we get the full day for user-selected end dates
+            if (endDate.HasValue && endDate.Value.TimeOfDay == TimeSpan.Zero)
             {
-                query = query.Where(p => p.Transaction.RetailerId == retailerId);
+                endDate = endDate.Value.AddDays(1); // Include entire end date
             }
 
-            if (!string.IsNullOrEmpty(wholesalerId))
-            {
-                query = query.Where(p => p.Transaction.WholesalerId == wholesalerId);
-            }
+            var allTransactions = await _context.Transactions
+                .Include(t => t.Order)
+                    .ThenInclude(o => o.Retailer)
+                .Include(t => t.Order)
+                    .ThenInclude(o => o.Wholesaler)
+                .Include(t => t.Payments)
+                .Where(t => t.Order.OrderDate >= startDate && t.Order.OrderDate < endDate &&
+                           t.Order.Status != OrderStatus.Cancelled)
+                .ToListAsync();
 
-            if (!string.IsNullOrEmpty(paymentMethod))
+            // Apply filters
+            var transactions = allTransactions;
+            if (!string.IsNullOrEmpty(retailerFilter))
             {
-                if (Enum.TryParse<PaymentMethod>(paymentMethod, out var method))
+                if (retailerFilter.StartsWith("EXTERNAL:"))
                 {
-                    query = query.Where(p => p.Method == method);
+                    var externalName = retailerFilter.Substring("EXTERNAL:".Length);
+                    transactions = transactions.Where(t => t.Order.RetailerId == null && 
+                                                         t.Order.Notes != null && 
+                                                         t.Order.Notes.Contains(externalName)).ToList();
+                }
+                else
+                {
+                    transactions = transactions.Where(t => t.Order.RetailerId == retailerFilter).ToList();
                 }
             }
 
-            // Execute query
-            var payments = await query
-                .OrderByDescending(p => p.PaymentDate)
-                .ToListAsync();
-
-            // Group payments by method for chart data
-            var paymentsByMethod = payments
-                .GroupBy(p => p.Method)
-                .Select(g => new
-                {
-                    Method = g.Key.ToString(),
-                    Count = g.Count(),
-                    Value = g.Sum(p => p.Amount)
-                })
-                .ToList();
-
-            // Group payments by date for trend chart
-            var paymentsByDate = payments
-                .GroupBy(p => p.PaymentDate.Date)
-                .Select(g => new
-                {
-                    Date = g.Key,
-                    Count = g.Count(),
-                    Value = g.Sum(p => p.Amount)
-                })
-                .OrderBy(d => d.Date)
-                .ToList();
-
-            // Group payments by retailer
-            var paymentsByRetailer = payments
-                .GroupBy(p => p.Transaction?.RetailerId)
-                .Select(g => new
-                {
-                    RetailerId = g.Key,
-                    RetailerName = g.Key == null ? 
-                        // External retailer - extract name from order notes
-                        (g.First().Transaction?.Order?.Notes?.StartsWith("External Order for: ") == true ?
-                            g.First().Transaction.Order.Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
-                            "External Customer") :
-                        // Regular retailer
-                        g.First().Transaction?.Order?.Retailer?.BusinessName ?? "Unknown",
-                    Count = g.Count(),
-                    Value = g.Sum(p => p.Amount)
-                })
-                .OrderByDescending(r => r.Value)
-                .Take(10)
-                .ToList();
-
-            // Group payments by wholesaler
-            var paymentsByWholesaler = payments
-                .GroupBy(p => p.Transaction?.WholesalerId)
-                .Where(g => g.Key != null)
-                .Select(g => new
-                {
-                    WholesalerId = g.Key,
-                    WholesalerName = g.First().Transaction?.Order?.Wholesaler?.BusinessName ?? "Unknown",
-                    Count = g.Count(),
-                    Value = g.Sum(p => p.Amount)
-                })
-                .OrderByDescending(w => w.Value)
-                .Take(10)
-                .ToList();
-
-            // Calculate totals
-            var totalPayments = payments.Count;
-            var totalAmount = payments.Sum(p => p.Amount);
-
-            // Calculate collection rate correctly - get all transactions in the date range (exclude cancelled orders)
-            var allTransactionsInPeriod = await _context.Transactions
-                .Include(t => t.Order)
-                .Include(t => t.Payments)
-                .Where(t => t.Order.OrderDate >= startDate && t.Order.OrderDate <= endDate &&
-                          t.Order.Status != OrderStatus.Cancelled && // Exclude cancelled orders
-                          (retailerId == null || t.RetailerId == retailerId) &&
-                          (wholesalerId == null || t.WholesalerId == wholesalerId))
-                .ToListAsync();
-
-            // Calculate total amount owed and total amount paid
-            var totalAmountOwed = allTransactionsInPeriod.Sum(t => t.Amount);
-            var totalAmountPaid = allTransactionsInPeriod.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
-            var totalPendingAmount = totalAmountOwed - totalAmountPaid;
-            var collectionRate = totalAmountOwed > 0 ? (totalAmountPaid / totalAmountOwed) * 100 : 0;
-
-            // Build the enhanced view model
-            var viewModel = new PaymentsReportViewModel
+            if (!string.IsNullOrEmpty(wholesalerFilter))
             {
-                // Dates and filters
+                if (wholesalerFilter.StartsWith("PARTNER:"))
+                {
+                    var partnerName = wholesalerFilter.Substring("PARTNER:".Length);
+                    transactions = transactions.Where(t => t.Order.WholesalerId == null && 
+                                                         t.Order.Notes != null && 
+                                                         t.Order.Notes.Contains(partnerName)).ToList();
+                }
+                else
+                {
+                    transactions = transactions.Where(t => t.Order.WholesalerId == wholesalerFilter).ToList();
+                }
+            }
+
+            // ALL transactions generate platform fees since all involve registered users
+            // (Partners are wholesalers, External customers are retailers)
+            var totalTransactionVolume = transactions.Sum(t => t.Amount);
+            var actualRevenue = transactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
+            var outstandingAmount = totalTransactionVolume - actualRevenue;
+            
+            // Platform fees charged on ALL orders (0.1% fee rate)
+            var platformFees = totalTransactionVolume * 0.001m;
+            var collectionRate = totalTransactionVolume > 0 ? (actualRevenue / totalTransactionVolume) * 100 : 0;
+
+            // Calculate orders this month
+            var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var nextMonth = currentMonth.AddMonths(1);
+            
+            var ordersThisMonth = await _context.Orders
+                .Where(o => o.OrderDate >= currentMonth && o.OrderDate < nextMonth &&
+                           o.Status != OrderStatus.Cancelled)
+                .CountAsync();
+
+            var monthlyData = transactions
+                .GroupBy(t => new { t.Order.OrderDate.Year, t.Order.OrderDate.Month })
+                .Select(g => new MonthlyFinancialData
+                {
+                    Period = $"{g.Key.Year}-{g.Key.Month:D2}",
+                    TransactionVolume = g.Sum(t => t.Amount),
+                    ActualRevenue = g.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0),
+                    // Platform fees charged on ALL orders (0.1% fee rate)
+                    PlatformFees = g.Sum(t => t.Amount) * 0.001m,
+                    TransactionCount = g.Count()
+                })
+                .OrderBy(m => m.Period)
+                .ToList();
+
+            // Retailer breakdowns
+            var retailerBreakdowns = new List<RetailerFinancialBreakdown>();
+            
+            // All retailer transactions (including registered retailers and external customers)
+            // 1. Registered retailers
+            var registeredRetailerTransactions = transactions.Where(t => t.Order.Retailer != null).ToList();
+            var registeredRetailerGroups = registeredRetailerTransactions
+                .GroupBy(t => new { t.Order.RetailerId, t.Order.Retailer!.BusinessName })
+                .ToList();
+
+            foreach (var group in registeredRetailerGroups)
+            {
+                var groupTransactions = group.ToList();
+                var volume = groupTransactions.Sum(t => t.Amount);
+                var paid = groupTransactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
+                
+                retailerBreakdowns.Add(new RetailerFinancialBreakdown
+                {
+                    RetailerId = group.Key.RetailerId!,
+                    RetailerName = group.Key.BusinessName ?? "Unknown Retailer",
+                    OrderCount = groupTransactions.Select(t => t.OrderId).Distinct().Count(),
+                    TransactionVolume = volume,
+                    PlatformFees = volume * 0.001m, // Platform fees on ALL orders
+                    AmountPaid = paid,
+                    Outstanding = volume - paid,
+                    CollectionRate = volume > 0 ? (paid / volume) * 100 : 0,
+                    Type = "Registered"
+                });
+            }
+
+            // 2. External customers (they are retailers too, just ordering externally)
+            var externalCustomerTransactions = transactions.Where(t => t.Order.RetailerId == null && 
+                                                                 t.Order.Notes != null && 
+                                                                 t.Order.Notes.StartsWith("External Order for: ")).ToList();
+            var externalGroups = externalCustomerTransactions
+                .GroupBy(t => ExtractExternalCustomerName(t.Order.Notes!))
+                .ToList();
+
+            foreach (var group in externalGroups)
+            {
+                var groupTransactions = group.ToList();
+                var volume = groupTransactions.Sum(t => t.Amount);
+                var paid = groupTransactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
+                
+                retailerBreakdowns.Add(new RetailerFinancialBreakdown
+                {
+                    RetailerId = $"EXTERNAL:{group.Key}",
+                    RetailerName = group.Key,
+                    OrderCount = groupTransactions.Select(t => t.OrderId).Distinct().Count(),
+                    TransactionVolume = volume,
+                    PlatformFees = volume * 0.001m, // Platform fees on ALL orders
+                    AmountPaid = paid,
+                    Outstanding = volume - paid,
+                    CollectionRate = volume > 0 ? (paid / volume) * 100 : 0,
+                    Type = "External"
+                });
+            }
+
+            // Wholesaler breakdowns
+            var wholesalerBreakdowns = new List<WholesalerFinancialBreakdown>();
+            
+            // All wholesaler transactions (including registered wholesalers and partners)
+            // 1. Registered wholesalers
+            var registeredWholesalerTransactions = transactions.Where(t => t.Order.Wholesaler != null).ToList();
+            var registeredWholesalerGroups = registeredWholesalerTransactions
+                .GroupBy(t => new { t.Order.WholesalerId, t.Order.Wholesaler!.BusinessName })
+                .ToList();
+
+            foreach (var group in registeredWholesalerGroups)
+            {
+                var groupTransactions = group.ToList();
+                var volume = groupTransactions.Sum(t => t.Amount);
+                var paid = groupTransactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
+                
+                wholesalerBreakdowns.Add(new WholesalerFinancialBreakdown
+                {
+                    WholesalerId = group.Key.WholesalerId!,
+                    WholesalerName = group.Key.BusinessName ?? "Unknown Wholesaler",
+                    OrderCount = groupTransactions.Select(t => t.OrderId).Distinct().Count(),
+                    TransactionVolume = volume,
+                    PlatformFees = volume * 0.001m, // Platform fees on ALL orders
+                    AmountPaid = paid,
+                    Outstanding = volume - paid,
+                    CollectionRate = volume > 0 ? (paid / volume) * 100 : 0,
+                    Type = "Registered"
+                });
+            }
+
+            // 2. Partnership orders (partners are wholesalers too, just working through partnerships)
+            var partnershipTransactions = transactions.Where(t => t.Order.WholesalerId == null && 
+                                                                   t.Order.Notes != null && 
+                                                                   t.Order.Notes.StartsWith("Partnership Order from: ")).ToList();
+            var partnershipGroups = partnershipTransactions
+                .GroupBy(t => ExtractPartnershipName(t.Order.Notes!))
+                .ToList();
+
+            foreach (var group in partnershipGroups)
+            {
+                var groupTransactions = group.ToList();
+                var volume = groupTransactions.Sum(t => t.Amount);
+                var paid = groupTransactions.Sum(t => t.Payments?.Sum(p => p.Amount) ?? 0);
+                
+                wholesalerBreakdowns.Add(new WholesalerFinancialBreakdown
+                {
+                    WholesalerId = $"PARTNER:{group.Key}",
+                    WholesalerName = group.Key,
+                    OrderCount = groupTransactions.Select(t => t.OrderId).Distinct().Count(),
+                    TransactionVolume = volume,
+                    PlatformFees = volume * 0.001m, // Platform fees on ALL orders
+                    AmountPaid = paid,
+                    Outstanding = volume - paid,
+                    CollectionRate = volume > 0 ? (paid / volume) * 100 : 0,
+                    Type = "Partnership"
+                });
+            }
+
+            // Build filter options - only show registered users
+            var availableRetailers = retailerBreakdowns
+                .Where(r => r.Type == "Registered")
+                .Select(r => new { Id = r.RetailerId, Name = r.RetailerName })
+                .Cast<dynamic>()
+                .ToList();
+
+            var availableWholesalers = wholesalerBreakdowns
+                .Where(w => w.Type == "Registered")
+                .Select(w => new { Id = w.WholesalerId, Name = w.WholesalerName })
+                .Cast<dynamic>()
+                .ToList();
+
+            var viewModel = new FinancialReportViewModel
+            {
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
-                RetailerId = retailerId,
-                WholesalerId = wholesalerId,
-                PaymentMethodFilter = paymentMethod,
-                
-                // Collections for dropdowns
-                Payments = payments,
-                Retailers = retailers,
-                Wholesalers = wholesalers,
-                PaymentMethods = Enum.GetValues(typeof(PaymentMethod)).Cast<PaymentMethod>().ToList(),
-                
-                // Summary metrics
-                TotalPayments = totalPayments,
-                TotalAmount = totalAmount,
-                TotalPendingAmount = totalPendingAmount,
+                RetailerFilter = retailerFilter,
+                WholesalerFilter = wholesalerFilter,
+                TotalTransactionVolume = totalTransactionVolume,
+                ActualRevenue = actualRevenue,
+                OutstandingAmount = outstandingAmount,
+                PlatformFees = platformFees,
                 CollectionRate = collectionRate,
-                
-                // Chart data
-                PaymentsByMethodChart = paymentsByMethod.Select(p => new ChartDataPoint
-                {
-                    Label = p.Method,
-                    Value = p.Value,
-                    Count = p.Count
-                }).ToList(),
-                
-                PaymentsTrendChart = paymentsByDate.Select(d => new ChartDataPoint
-                {
-                    Label = d.Date.ToString("MM/dd"),
-                    Value = d.Value,
-                    Count = d.Count
-                }).ToList(),
-                
-                PaymentsByRetailerChart = paymentsByRetailer.Select(r => new ChartDataPoint
-                {
-                    Label = r.RetailerName,
-                    Value = r.Value,
-                    Count = r.Count
-                }).ToList(),
-                
-                PaymentsByWholesalerChart = paymentsByWholesaler.Select(w => new ChartDataPoint
-                {
-                    Label = w.WholesalerName,
-                    Value = w.Value,
-                    Count = w.Count
-                }).ToList(),
-                
-                // Top performers
-                TopRetailers = paymentsByRetailer.Select(r => new TopRetailerItem
-                {
-                    RetailerId = r.RetailerId,
-                    RetailerName = r.RetailerName,
-                    OrderCount = r.Count,
-                    TotalRevenue = r.Value
-                }).ToList(),
-                
-                TopWholesalers = paymentsByWholesaler.Select(w => new TopWholesalerItem
-                {
-                    WholesalerId = w.WholesalerId,
-                    WholesalerName = w.WholesalerName,
-                    OrderCount = w.Count,
-                    TotalSpent = w.Value
-                }).ToList()
+                OrdersThisMonth = ordersThisMonth,
+                MonthlyTrends = monthlyData,
+                // Filter to show only registered users in breakdown tables
+                RetailerBreakdowns = retailerBreakdowns.Where(r => r.Type == "Registered").OrderByDescending(r => r.PlatformFees).ToList(),
+                WholesalerBreakdowns = wholesalerBreakdowns.Where(w => w.Type == "Registered").OrderByDescending(w => w.PlatformFees).ToList(),
+                AvailableRetailers = availableRetailers,
+                AvailableWholesalers = availableWholesalers
             };
 
             return View(viewModel);
         }
 
-        // GET: Reports/Users - User activity report for Admin
+        private string ExtractExternalCustomerName(string notes)
+        {
+            if (notes.StartsWith("External Order for: "))
+            {
+                var lines = notes.Split('\n');
+                return lines[0].Replace("External Order for: ", "").Trim();
+            }
+            return "Unknown External Customer";
+        }
+
+        private string ExtractPartnershipName(string notes)
+        {
+            if (notes.StartsWith("Partnership Order from: "))
+            {
+                var lines = notes.Split('\n');
+                return lines[0].Replace("Partnership Order from: ", "").Trim();
+            }
+            return "Unknown Partnership";
+        }
+
+        // Simple users report
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Users()
         {
-            // Get all users with their roles
             var users = await _userManager.Users.ToListAsync();
-            var userViewModels = new List<UserReportViewModel>();
+            var userReports = new List<UserReportViewModel>();
 
             foreach (var user in users)
             {
                 var roles = await _userManager.GetRolesAsync(user);
-                var userRole = roles.FirstOrDefault() ?? "No Role";
+                var role = roles.FirstOrDefault() ?? "Unknown";
 
-                var orderCount = 0;
-                decimal totalSpent = 0;
-                decimal totalEarned = 0;
+                var orderCount = await _context.Orders
+                    .Where(o => (role == "Retailer" && o.RetailerId == user.Id) ||
+                               (role == "Wholesaler" && o.WholesalerId == user.Id))
+                    .CountAsync();
 
-                if (userRole == "Retailer")
-                {
-                    // For retailers, count orders and total spent
-                    orderCount = await _context.Orders
-                        .CountAsync(o => o.RetailerId == user.Id);
-                    
-                    totalSpent = await _context.Transactions
-                        .Where(t => t.RetailerId == user.Id)
-                        .SumAsync(t => t.AmountPaid);
-                }
-                else if (userRole == "Wholesaler")
-                {
-                    // For wholesalers, count orders received and total earned
-                    orderCount = await _context.Orders
-                        .CountAsync(o => o.WholesalerId == user.Id);
-                    
-                    totalEarned = await _context.Transactions
-                        .Where(t => t.WholesalerId == user.Id)
-                        .SumAsync(t => t.AmountPaid);
-                }
+                var totalSpent = role == "Retailer" ? 
+                    await _context.Orders
+                        .Where(o => o.RetailerId == user.Id)
+                        .SumAsync(o => o.TotalAmount) : 0;
 
-                userViewModels.Add(new UserReportViewModel
+                var totalEarned = role == "Wholesaler" ?
+                    await _context.Orders
+                        .Where(o => o.WholesalerId == user.Id)
+                        .SumAsync(o => o.TotalAmount) : 0;
+
+                userReports.Add(new UserReportViewModel
                 {
                     Id = user.Id,
-                    UserName = user.UserName,
-                    Email = user.Email,
-                    BusinessName = user.BusinessName,
-                    Role = userRole,
-                    RegistrationDate = DateTime.UtcNow,
+                    UserName = user.UserName ?? "",
+                    BusinessName = user.BusinessName ?? "",
+                    Email = user.Email ?? "",
+                    Role = role,
+                    RegistrationDate = DateTime.UtcNow.AddDays(-30), // Placeholder since CreatedAt doesn't exist
                     OrderCount = orderCount,
                     TotalSpent = totalSpent,
                     TotalEarned = totalEarned
                 });
             }
 
-            return View(userViewModels);
+            return View(userReports);
         }
 
-        // GET: Reports/RetailerPerformance - Retailer's own performance report
+        // Simple retailer purchases report
         [Authorize(Roles = "Retailer")]
-        public async Task<IActionResult> RetailerPerformance(DateTime? startDate, DateTime? endDate)
+        public async Task<IActionResult> RetailerPurchases(DateTime? startDate, DateTime? endDate, string? supplierId = null)
         {
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow;
+            startDate ??= DateTime.UtcNow.AddMonths(-3).Date; // Start of day 3 months ago
+            endDate ??= DateTime.UtcNow.Date.AddDays(1); // End of today (start of tomorrow)
 
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
+            // Ensure we get the full day for user-selected end dates
+            if (endDate.HasValue && endDate.Value.TimeOfDay == TimeSpan.Zero)
             {
-                return NotFound();
+                endDate = endDate.Value.AddDays(1); // Include entire end date
             }
 
-            // Get retailer's orders within date range (exclude cancelled orders from payment calculations)
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return NotFound();
+
+            // Filter logic for both wholesalers and partners
             var orders = await _context.Orders
                 .Include(o => o.Wholesaler)
-                .Include(o => o.Items)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Where(o => o.RetailerId == user.Id && 
-                        o.OrderDate >= startDate && 
-                        o.OrderDate <= endDate &&
-                        o.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .OrderByDescending(o => o.OrderDate)
-                .ToListAsync();
-
-            // Reload transactions to ensure we have the latest data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
-                
-            // Create a lookup dictionary for quick access
-            var transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
-
-            // Fix transaction statuses in the database
-            bool hasChanges = false;
-            foreach (var order in orders)
-            {
-                if (order.Transaction != null)
-                {
-                    // Calculate the actual amount paid from the Payments collection
-                    decimal actualAmountPaid = order.Transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                    
-                    // Update the AmountPaid field if it's incorrect
-                    if (order.Transaction.AmountPaid != actualAmountPaid)
-                    {
-                        order.Transaction.AmountPaid = actualAmountPaid;
-                        hasChanges = true;
-                    }
-                    
-                    var totalAmount = order.Transaction.Amount;
-                    
-                    // Update transaction status based on actual payment
-                    if (actualAmountPaid >= totalAmount && order.Transaction.Status != TransactionStatus.Completed)
-                    {
-                        order.Transaction.Status = TransactionStatus.Completed;
-                        _context.Update(order.Transaction);
-                        hasChanges = true;
-                    }
-                    else if (actualAmountPaid > 0 && actualAmountPaid < totalAmount && 
-                             order.Transaction.Status == TransactionStatus.Pending)
-                    {
-                        order.Transaction.Status = TransactionStatus.PartiallyPaid;
-                        _context.Update(order.Transaction);
-                        hasChanges = true;
-                    }
-                }
-            }
-            
-            // Save any status changes to the database
-            if (hasChanges)
-            {
-                await _context.SaveChangesAsync();
-                
-                // Reload transactions after saving changes
-                transactions = await _context.Transactions
-                    .Include(t => t.Payments)
-                    .Where(t => orderIds.Contains(t.OrderId))
-                    .ToListAsync();
-                    
-                // Update the lookup dictionary
-                transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
-            }
-
-            // Enhanced Order Metrics
-            var totalOrders = orders.Count;
-            var completedOrders = orders.Count(o => o.Status == OrderStatus.Completed);
-            var pendingOrders = orders.Count(o => o.Status == OrderStatus.Pending);
-            var processingOrders = orders.Count(o => o.Status == OrderStatus.Processing);
-            var shippedOrders = orders.Count(o => o.Status == OrderStatus.Shipped);
-            var deliveredOrders = orders.Count(o => o.Status == OrderStatus.Delivered);
-            var cancelledOrders = orders.Count(o => o.Status == OrderStatus.Cancelled);
-
-            // Enhanced Financial Metrics
-            var totalOrderValue = orders.Sum(o => o.TotalAmount);
-            var actualAmountSpent = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .Sum(o => transactionLookup[o.Id].AmountPaid);
-            var outstandingBalance = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .Sum(o => {
-                    var transaction = transactionLookup[o.Id];
-                    return transaction.Amount - transaction.AmountPaid;
-                });
-            var avgOrderValue = totalOrders > 0 ? totalOrderValue / totalOrders : 0;
-
-            // Performance Metrics
-            var orderItems = orders.SelectMany(o => o.Items ?? new List<OrderItem>()).ToList();
-            var totalProductsPurchased = orderItems.Select(oi => oi.WholesalerProductId).Distinct().Count();
-            var totalQuantityOrdered = orderItems.Sum(oi => oi.Quantity);
-            var avgProductPrice = orderItems.Any() ? orderItems.Average(oi => oi.UnitPrice) : 0;
-            var uniqueWholesalers = orders.Select(o => o.WholesalerId).Distinct().Count();
-            var orderFrequency = totalOrders > 0 ? totalOrders / Math.Max(1, (endDate.Value - startDate.Value).TotalDays / 30) : 0;
-
-            // Business Insights
-            var preferredWholesaler = orders
-                .GroupBy(o => o.WholesalerId)
-                .OrderByDescending(g => g.Count())
-                .FirstOrDefault()?.First().Wholesaler?.BusinessName ?? "None";
-
-            var categorySpending = await GetCategorySpendingAnalysis(user.Id, startDate.Value, endDate.Value);
-            var mostOrderedCategory = categorySpending.OrderByDescending(c => c.TotalSpent).FirstOrDefault()?.CategoryName ?? "None";
-
-            // Monthly trends for growth calculation
-            var monthlyTrends = await GetMonthlySpendingTrends(user.Id, startDate.Value, endDate.Value);
-            var monthlySpendTrend = CalculateGrowthRate(monthlyTrends);
-
-            // Payment reliability assessment
-            var paymentReliability = actualAmountSpent / Math.Max(1, totalOrderValue) >= 0.9m ? "Excellent" :
-                                   actualAmountSpent / Math.Max(1, totalOrderValue) >= 0.7m ? "Good" : "Poor";
-
-            // Top wholesalers by order count and amount
-            var topWholesalers = orders
-                .GroupBy(o => o.WholesalerId)
-                .Select(g => new TopWholesalerItem
-                {
-                    WholesalerId = g.Key,
-                    WholesalerName = g.First().Wholesaler?.BusinessName ?? "Unknown",
-                    OrderCount = g.Count(),
-                    TotalSpent = g.Sum(o => o.TotalAmount),
-                    ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                    .Sum(o => transactionLookup[o.Id].AmountPaid)
-                })
-                .OrderByDescending(w => w.TotalSpent)
-                .Take(5)
-                .ToList();
-
-            // Chart Data
-            var paymentStatusChart = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .GroupBy(o => transactionLookup[o.Id].Status)
-                .Select(g => new ChartDataPoint
-                {
-                    Label = g.Key.ToString(),
-                    Count = g.Count(),
-                    Value = g.Sum(o => transactionLookup[o.Id].AmountPaid)
-                })
-                .ToList();
-
-            var orderStatusChart = new List<ChartDataPoint>
-            {
-                new ChartDataPoint { Label = "Completed", Count = completedOrders, Value = completedOrders },
-                new ChartDataPoint { Label = "Pending", Count = pendingOrders, Value = pendingOrders },
-                new ChartDataPoint { Label = "Processing", Count = processingOrders, Value = processingOrders },
-                new ChartDataPoint { Label = "Shipped", Count = shippedOrders, Value = shippedOrders },
-                new ChartDataPoint { Label = "Delivered", Count = deliveredOrders, Value = deliveredOrders },
-                new ChartDataPoint { Label = "Cancelled", Count = cancelledOrders, Value = cancelledOrders }
-            }.Where(c => c.Count > 0).ToList();
-
-            var monthlySpendingChart = monthlyTrends.Select(t => new ChartDataPoint
-            {
-                Label = t.Month,
-                Value = t.AmountSpent,
-                Count = t.OrderCount
-            }).ToList();
-
-            var categoryDistributionChart = categorySpending.Select(c => new ChartDataPoint
-            {
-                Label = c.CategoryName,
-                Value = c.TotalSpent,
-                Count = c.OrderCount
-            }).ToList();
-
-            // Recent orders with payment status
-            var recentOrders = orders.Take(10)
-                .Select(o => {
-                    // Use the transaction from our lookup dictionary to ensure we have the latest data
-                    Transaction transaction = null;
-                    if (transactionLookup.TryGetValue(o.Id, out var lookupTransaction))
-                    {
-                        transaction = lookupTransaction;
-                    }
-                    else
-                    {
-                        transaction = o.Transaction;
-                    }
-                    
-                    // Calculate payment values
-                    var amountPaid = transaction?.AmountPaid ?? 0;
-                    var totalAmount = transaction?.Amount ?? o.TotalAmount;
-                    var remainingAmount = totalAmount - amountPaid;
-                    
-                    // Use the transaction status from our lookup
-                    TransactionStatus paymentStatus = transaction?.Status ?? TransactionStatus.Pending;
-                    
-                    return new OrderWithPaymentStatus
-                    {
-                        OrderId = o.Id,
-                        OrderDate = o.OrderDate,
-                        TotalAmount = totalAmount,
-                        AmountPaid = amountPaid,
-                        RemainingAmount = remainingAmount,
-                        OrderStatus = o.Status,
-                        PaymentStatus = paymentStatus
-                    };
-                })
-                .ToList();
-
-            var viewModel = new RetailerReportViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                RetailerId = user.Id,
-                RetailerName = user.BusinessName ?? user.UserName,
-                
-                // Order Metrics
-                TotalOrders = totalOrders,
-                CompletedOrders = completedOrders,
-                PendingOrders = pendingOrders,
-                ProcessingOrders = processingOrders,
-                ShippedOrders = shippedOrders,
-                DeliveredOrders = deliveredOrders,
-                CancelledOrders = cancelledOrders,
-                
-                // Financial Metrics
-                TotalOrderValue = totalOrderValue,
-                ActualAmountSpent = actualAmountSpent,
-                OutstandingBalance = outstandingBalance,
-                AvgOrderValue = avgOrderValue,
-                
-                // Performance Metrics
-                TotalProductsPurchased = totalProductsPurchased,
-                TotalQuantityOrdered = totalQuantityOrdered,
-                AvgProductPrice = (decimal)avgProductPrice,
-                UniqueWholesalers = uniqueWholesalers,
-                OrderFrequency = (decimal)orderFrequency,
-                
-                // Business Insights
-                PreferredWholesaler = preferredWholesaler,
-                MostOrderedCategory = mostOrderedCategory,
-                MonthlySpendTrend = monthlySpendTrend,
-                PaymentReliability = paymentReliability,
-                
-                // Collections
-                RecentOrders = recentOrders,
-                TopWholesalers = topWholesalers,
-                CategorySpending = categorySpending,
-                MonthlyTrends = monthlyTrends,
-                
-                // Chart Data
-                PaymentStatusChart = paymentStatusChart,
-                OrderStatusChart = orderStatusChart,
-                MonthlySpendingChart = monthlySpendingChart,
-                CategoryDistributionChart = categoryDistributionChart
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/WholesalerPerformance - Wholesaler's own performance report
-        [Authorize(Roles = "Wholesaler")]
-        public async Task<IActionResult> WholesalerPerformance(DateTime? startDate, DateTime? endDate)
-        {
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow;
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // Get wholesaler's orders within date range (exclude cancelled orders from payment calculations)
-            var orders = await _context.Orders
-                .Include(o => o.Retailer)
-                .Include(o => o.Items)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Where(o => o.WholesalerId == user.Id && 
-                        o.OrderDate >= startDate && 
-                        o.OrderDate <= endDate &&
-                        o.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .OrderByDescending(o => o.OrderDate)
-                .ToListAsync();
-
-            // Reload transactions to ensure we have the latest data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
-                
-            // Create a lookup dictionary for quick access
-            var transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
-
-            // Fix transaction statuses in the database
-            bool hasChanges = false;
-            foreach (var order in orders)
-            {
-                if (order.Transaction != null)
-                {
-                    // Calculate the actual amount paid from the Payments collection
-                    decimal actualAmountPaid = order.Transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                    
-                    // Update the AmountPaid field if it's incorrect
-                    if (order.Transaction.AmountPaid != actualAmountPaid)
-                    {
-                        order.Transaction.AmountPaid = actualAmountPaid;
-                        hasChanges = true;
-                    }
-                    
-                    var totalAmount = order.Transaction.Amount;
-                    
-                    // Update transaction status based on actual payment
-                    if (actualAmountPaid >= totalAmount && order.Transaction.Status != TransactionStatus.Completed)
-                    {
-                        order.Transaction.Status = TransactionStatus.Completed;
-                        _context.Update(order.Transaction);
-                        hasChanges = true;
-                    }
-                    else if (actualAmountPaid > 0 && actualAmountPaid < totalAmount && 
-                             order.Transaction.Status == TransactionStatus.Pending)
-                    {
-                        order.Transaction.Status = TransactionStatus.PartiallyPaid;
-                        _context.Update(order.Transaction);
-                        hasChanges = true;
-                    }
-                }
-            }
-            
-            // Save any status changes to the database
-            if (hasChanges)
-            {
-                await _context.SaveChangesAsync();
-                
-                // Reload transactions after saving changes
-                transactions = await _context.Transactions
-                    .Include(t => t.Payments)
-                    .Where(t => orderIds.Contains(t.OrderId))
-                    .ToListAsync();
-                    
-                // Update the lookup dictionary
-                transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
-            }
-
-            // Enhanced Order Metrics
-            var totalOrders = orders.Count;
-            var completedOrders = orders.Count(o => o.Status == OrderStatus.Completed);
-            var pendingOrders = orders.Count(o => o.Status == OrderStatus.Pending);
-            var processingOrders = orders.Count(o => o.Status == OrderStatus.Processing);
-            var shippedOrders = orders.Count(o => o.Status == OrderStatus.Shipped);
-            var deliveredOrders = orders.Count(o => o.Status == OrderStatus.Delivered);
-            var cancelledOrders = orders.Count(o => o.Status == OrderStatus.Cancelled);
-
-            // Enhanced Financial Metrics
-            var totalOrderValue = orders.Sum(o => o.TotalAmount);
-            var actualRevenue = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .Sum(o => transactionLookup[o.Id].AmountPaid);
-            var outstandingPayments = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .Sum(o => {
-                    var transaction = transactionLookup[o.Id];
-                    return transaction.Amount - transaction.AmountPaid;
-                });
-            var avgOrderValue = totalOrders > 0 ? totalOrderValue / totalOrders : 0;
-
-            // Performance Metrics
-            var orderItems = orders.SelectMany(o => o.Items ?? new List<OrderItem>()).ToList();
-            var totalProductsSold = orderItems.Select(oi => oi.WholesalerProductId).Distinct().Count();
-            var totalQuantitySold = orderItems.Sum(oi => oi.Quantity);
-            var avgSellPrice = orderItems.Any() ? orderItems.Average(oi => oi.UnitPrice) : 0;
-            var uniqueRetailers = orders.Select(o => o.RetailerId).Distinct().Count();
-            var orderFrequency = totalOrders > 0 ? totalOrders / Math.Max(1, (endDate.Value - startDate.Value).TotalDays / 30) : 0;
-
-            // Get inventory data for analysis
-            var productQueryResult = await _context.WholesalerProducts
-                .Include(wp => wp.Product)
-                .Where(wp => wp.WholesalerId == user.Id)
-                .ToListAsync();
-
-            // Get inventory metrics
-            var activeProducts = productQueryResult.Count(wp => wp.IsActive);
-            var lowStockProducts = productQueryResult.Count(wp => wp.StockQuantity <= 50);
-
-            // Business Insights
-            var topRetailer = orders
-                .GroupBy(o => o.RetailerId)
-                .OrderByDescending(g => g.Sum(o => o.TotalAmount))
-                .FirstOrDefault()?.First().Retailer?.BusinessName ?? "None";
-
-            var categoryPerformance = await GetCategoryPerformanceAnalysis(user.Id, startDate.Value, endDate.Value);
-            var bestSellingCategory = categoryPerformance.OrderByDescending(c => c.TotalRevenue).FirstOrDefault()?.CategoryName ?? "None";
-
-            // Monthly trends for growth calculation
-            var monthlyTrends = await GetMonthlyRevenueTrends(user.Id, startDate.Value, endDate.Value);
-            var monthlyRevenueTrend = CalculateRevenueGrowthRate(monthlyTrends);
-
-            // Inventory health assessment
-            var inventoryTurnover = totalQuantitySold > 0 && productQueryResult.Any() ? 
-                totalQuantitySold / (decimal)productQueryResult.Sum(wp => wp.StockQuantity) : 0;
-            var inventoryHealth = inventoryTurnover >= 0.5m ? "Excellent" :
-                                inventoryTurnover >= 0.3m ? "Good" : "Poor";
-
-            var inventoryStatus = await GetInventoryStatusAnalysis(user.Id, startDate.Value, endDate.Value);
-
-            // Top retailers by order count and amount
-            var topRetailers = orders
-                .GroupBy(o => o.RetailerId)
-                .Select(g => new TopRetailerItem
-                {
-                    RetailerId = g.Key,
-                    RetailerName = g.Key == null ? 
-                        // External retailer - extract name from order notes
-                        (g.First().Notes?.StartsWith("External Order for: ") == true ?
-                            g.First().Notes.Split('\n')[0].Replace("External Order for: ", "").Trim() :
-                            "External Customer") :
-                        // Regular retailer
-                        g.First().Retailer?.BusinessName ?? "Unknown",
-                    OrderCount = g.Count(),
-                    TotalRevenue = g.Sum(o => o.TotalAmount),
-                    ActuallyPaid = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                    .Sum(o => transactionLookup[o.Id].AmountPaid)
-                })
-                .OrderByDescending(r => r.TotalRevenue)
-                .Take(5)
-                .ToList();
-
-            // Chart Data
-            var revenueChart = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .GroupBy(o => new { Month = o.OrderDate.Month, Year = o.OrderDate.Year })
-                .Select(g => new ChartDataPoint
-                {
-                    Label = $"{g.Key.Month}/{g.Key.Year}",
-                    Count = g.Count(),
-                    Value = g.Sum(o => {
-                        var transaction = transactionLookup[o.Id];
-                        return transaction.AmountPaid;
-                    })
-                })
-                .OrderBy(p => p.Label)
-                .ToList();
-
-            var orderStatusChart = new List<ChartDataPoint>
-            {
-                new ChartDataPoint { Label = "Completed", Count = completedOrders, Value = completedOrders },
-                new ChartDataPoint { Label = "Pending", Count = pendingOrders, Value = pendingOrders },
-                new ChartDataPoint { Label = "Processing", Count = processingOrders, Value = processingOrders },
-                new ChartDataPoint { Label = "Shipped", Count = shippedOrders, Value = shippedOrders },
-                new ChartDataPoint { Label = "Delivered", Count = deliveredOrders, Value = deliveredOrders },
-                new ChartDataPoint { Label = "Cancelled", Count = cancelledOrders, Value = cancelledOrders }
-            }.Where(c => c.Count > 0).ToList();
-
-            var paymentStatusChart = orders
-                .Where(o => transactionLookup.ContainsKey(o.Id))
-                .GroupBy(o => transactionLookup[o.Id].Status)
-                .Select(g => new ChartDataPoint
-                {
-                    Label = g.Key.ToString(),
-                    Count = g.Count(),
-                    Value = g.Sum(o => transactionLookup[o.Id].AmountPaid)
-                })
-                .ToList();
-
-            var categoryRevenueChart = categoryPerformance.Select(c => new ChartDataPoint
-            {
-                Label = c.CategoryName,
-                Value = c.TotalRevenue,
-                Count = c.OrderCount
-            }).ToList();
-
-            var inventoryDistributionChart = new List<ChartDataPoint>
-            {
-                new ChartDataPoint { Label = "Critical Stock", Count = productQueryResult.Count(wp => wp.StockQuantity <= 10), Value = productQueryResult.Count(wp => wp.StockQuantity <= 10) },
-                new ChartDataPoint { Label = "Low Stock", Count = productQueryResult.Count(wp => wp.StockQuantity > 10 && wp.StockQuantity <= 50), Value = productQueryResult.Count(wp => wp.StockQuantity > 10 && wp.StockQuantity <= 50) },
-                new ChartDataPoint { Label = "Normal Stock", Count = productQueryResult.Count(wp => wp.StockQuantity > 50 && wp.StockQuantity <= 200), Value = productQueryResult.Count(wp => wp.StockQuantity > 50 && wp.StockQuantity <= 200) },
-                new ChartDataPoint { Label = "High Stock", Count = productQueryResult.Count(wp => wp.StockQuantity > 200), Value = productQueryResult.Count(wp => wp.StockQuantity > 200) }
-            }.Where(c => c.Count > 0).ToList();
-
-            // Recent orders with payment status
-            var recentOrders = orders
-                .Take(10)
-                .Select(o => {
-                    // Use the transaction from our lookup dictionary to ensure we have the latest data
-                    Transaction transaction = null;
-                    if (transactionLookup.TryGetValue(o.Id, out var lookupTransaction))
-                    {
-                        transaction = lookupTransaction;
-                    }
-                    else
-                    {
-                        transaction = o.Transaction;
-                    }
-                    
-                    // Calculate payment values
-                    var amountPaid = transaction?.AmountPaid ?? 0;
-                    var totalAmount = transaction?.Amount ?? o.TotalAmount;
-                    var remainingAmount = totalAmount - amountPaid;
-                    
-                    // Use the transaction status from our lookup
-                    TransactionStatus paymentStatus = transaction?.Status ?? TransactionStatus.Pending;
-                    
-                    return new OrderWithPaymentStatus
-                    {
-                        OrderId = o.Id,
-                        OrderDate = o.OrderDate,
-                        TotalAmount = totalAmount,
-                        AmountPaid = amountPaid,
-                        RemainingAmount = remainingAmount,
-                        OrderStatus = o.Status,
-                        PaymentStatus = paymentStatus
-                    };
-                })
-                .ToList();
-
-            // Top products by quantity sold
-                
-            // Then perform the join on the client side
-            var topProducts = productQueryResult
-                .Join(orderItems,
-                    wp => wp.Id,
-                    oi => oi.WholesalerProductId,
-                    (wp, oi) => new {
-                        ProductId = wp.ProductId,
-                        ProductName = wp.Product.Name,
-                        Quantity = oi.Quantity,
-                        Revenue = oi.Quantity * oi.UnitPrice
-                    })
-                .GroupBy(x => new { x.ProductId, x.ProductName })
-                .Select(g => new TopProductItem
-                {
-                    ProductId = g.Key.ProductId,
-                    ProductName = g.Key.ProductName,
-                    QuantitySold = g.Sum(x => x.Quantity),
-                    TotalRevenue = g.Sum(x => x.Revenue)
-                })
-                .OrderByDescending(p => p.TotalRevenue)
-                .Take(5)
-                .ToList();
-
-            var viewModel = new WholesalerReportViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                WholesalerId = user.Id,
-                WholesalerName = user.BusinessName ?? user.UserName,
-                
-                // Order Metrics
-                TotalOrders = totalOrders,
-                CompletedOrders = completedOrders,
-                PendingOrders = pendingOrders,
-                ProcessingOrders = processingOrders,
-                ShippedOrders = shippedOrders,
-                DeliveredOrders = deliveredOrders,
-                CancelledOrders = cancelledOrders,
-                
-                // Financial Metrics
-                TotalOrderValue = totalOrderValue,
-                ActualRevenue = actualRevenue,
-                OutstandingPayments = outstandingPayments,
-                AvgOrderValue = avgOrderValue,
-                
-                // Performance Metrics
-                TotalProductsSold = totalProductsSold,
-                TotalQuantitySold = totalQuantitySold,
-                AvgSellPrice = (decimal)avgSellPrice,
-                UniqueRetailers = uniqueRetailers,
-                OrderFrequency = (decimal)orderFrequency,
-                ActiveProducts = activeProducts,
-                LowStockProducts = lowStockProducts,
-                
-                // Business Insights
-                TopRetailer = topRetailer,
-                BestSellingCategory = bestSellingCategory,
-                MonthlyRevenueTrend = monthlyRevenueTrend,
-                InventoryHealth = inventoryHealth,
-                InventoryTurnover = inventoryTurnover,
-                
-                // Collections
-                RecentOrders = recentOrders,
-                TopRetailers = topRetailers,
-                TopProducts = topProducts,
-                CategoryPerformance = categoryPerformance,
-                MonthlyTrends = monthlyTrends,
-                InventoryStatus = inventoryStatus,
-                
-                // Chart Data
-                RevenueChart = revenueChart,
-                OrderStatusChart = orderStatusChart,
-                PaymentStatusChart = paymentStatusChart,
-                CategoryRevenueChart = categoryRevenueChart,
-                InventoryDistributionChart = inventoryDistributionChart
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/RetailerInventoryAnalysis - Detailed inventory and ordering patterns for Retailers
-        [Authorize(Roles = "Retailer")]
-        public async Task<IActionResult> RetailerInventoryAnalysis(DateTime? startDate, DateTime? endDate)
-        {
-            // Default to last 3 months if no dates provided
-            startDate ??= DateTime.UtcNow.AddMonths(-3);
-            endDate ??= DateTime.UtcNow;
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // Get detailed order items data
-            var orderItems = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.WholesalerProduct)
-                    .ThenInclude(wp => wp.Product)
-                        .ThenInclude(p => p.Category)
-                .Include(oi => oi.WholesalerProduct)
-                    .ThenInclude(wp => wp.Wholesaler)
-                .Where(oi => oi.Order.RetailerId == user.Id && 
-                        oi.Order.OrderDate >= startDate && 
-                        oi.Order.OrderDate <= endDate)
-                .ToListAsync();
-
-            // Product performance analysis
-            var productAnalysis = orderItems
-                .GroupBy(oi => new { 
-                    ProductId = oi.WholesalerProduct.ProductId,
-                    ProductName = oi.WholesalerProduct.Product.Name,
-                    CategoryName = oi.WholesalerProduct.Product.Category.Name
-                })
-                .Select(g => new {
-                    ProductId = g.Key.ProductId,
-                    ProductName = g.Key.ProductName,
-                    CategoryName = g.Key.CategoryName,
-                    TotalQuantity = g.Sum(oi => oi.Quantity),
-                    TotalSpent = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    OrderCount = g.Count(),
-                    AvgOrderQuantity = g.Average(oi => oi.Quantity),
-                    AvgPrice = g.Average(oi => oi.UnitPrice),
-                    FirstOrderDate = g.Min(oi => oi.Order.OrderDate),
-                    LastOrderDate = g.Max(oi => oi.Order.OrderDate),
-                    DaysBetweenOrders = g.Count() > 1 ? (g.Max(oi => oi.Order.OrderDate) - g.Min(oi => oi.Order.OrderDate)).TotalDays / (g.Count() - 1) : 0
-                })
-                .OrderByDescending(p => p.TotalSpent)
-                .ToList();
-
-            // Category analysis
-            var categoryAnalysis = orderItems
-                .GroupBy(oi => oi.WholesalerProduct.Product.Category.Name)
-                .Select(g => new {
-                    CategoryName = g.Key,
-                    TotalQuantity = g.Sum(oi => oi.Quantity),
-                    TotalSpent = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    ProductCount = g.Select(oi => oi.WholesalerProduct.ProductId).Distinct().Count(),
-                    AvgOrderValue = g.Average(oi => oi.UnitPrice * oi.Quantity)
-                })
-                .OrderByDescending(c => c.TotalSpent)
-                .ToList();
-
-            // Seasonal trends (monthly analysis)
-            var monthlyTrends = orderItems
-                .GroupBy(oi => new { Year = oi.Order.OrderDate.Year, Month = oi.Order.OrderDate.Month })
-                .Select(g => new {
-                    Month = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    TotalQuantity = g.Sum(oi => oi.Quantity),
-                    TotalSpent = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    UniqueProducts = g.Select(oi => oi.WholesalerProduct.ProductId).Distinct().Count()
-                })
-                .OrderBy(m => m.Month)
-                .ToList();
-
-            // Supplier performance
-            var supplierAnalysis = orderItems
-                .GroupBy(oi => new {
-                    SupplierId = oi.WholesalerProduct.WholesalerId,
-                    SupplierName = oi.WholesalerProduct.Wholesaler.BusinessName ?? oi.WholesalerProduct.Wholesaler.UserName
-                })
-                .Select(g => new {
-                    SupplierId = g.Key.SupplierId,
-                    SupplierName = g.Key.SupplierName,
-                    TotalSpent = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    OrderCount = g.Select(oi => oi.OrderId).Distinct().Count(),
-                    ProductVariety = g.Select(oi => oi.WholesalerProduct.ProductId).Distinct().Count(),
-                    AvgDeliveryValue = g.Sum(oi => oi.UnitPrice * oi.Quantity) / g.Select(oi => oi.OrderId).Distinct().Count(),
-                    ReorderFrequency = g.Count() / Math.Max(1, (DateTime.UtcNow - g.Min(oi => oi.Order.OrderDate)).TotalDays / 30) // Orders per month
-                })
-                .OrderByDescending(s => s.TotalSpent)
-                .ToList();
-
-            var viewModel = new RetailerInventoryAnalysisViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                ProductAnalysis = productAnalysis.Select(p => new ProductAnalysisItem
-                {
-                    ProductId = p.ProductId,
-                    ProductName = p.ProductName,
-                    CategoryName = p.CategoryName,
-                    TotalQuantity = p.TotalQuantity,
-                    TotalSpent = p.TotalSpent,
-                    OrderCount = p.OrderCount,
-                    AvgOrderQuantity = (decimal)p.AvgOrderQuantity,
-                    AvgPrice = p.AvgPrice,
-                    ReorderFrequency = p.DaysBetweenOrders > 0 ? (decimal)p.DaysBetweenOrders : 0,
-                    LastOrderDate = p.LastOrderDate
-                }).Take(20).ToList(),
-                
-                CategoryAnalysis = categoryAnalysis.Select(c => new CategoryAnalysisItem
-                {
-                    CategoryName = c.CategoryName,
-                    TotalQuantity = c.TotalQuantity,
-                    TotalSpent = c.TotalSpent,
-                    ProductCount = c.ProductCount,
-                    AvgOrderValue = (decimal)c.AvgOrderValue
-                }).ToList(),
-                
-                MonthlyTrends = monthlyTrends.Select(m => new MonthlyTrendItem
-                {
-                    Month = m.Month,
-                    TotalQuantity = m.TotalQuantity,
-                    TotalSpent = m.TotalSpent,
-                    UniqueProducts = m.UniqueProducts
-                }).ToList(),
-                
-                SupplierAnalysis = supplierAnalysis.Select(s => new SupplierAnalysisItem
-                {
-                    SupplierId = s.SupplierId,
-                    SupplierName = s.SupplierName,
-                    TotalSpent = s.TotalSpent,
-                    OrderCount = s.OrderCount,
-                    ProductVariety = s.ProductVariety,
-                    AvgDeliveryValue = s.AvgDeliveryValue,
-                    ReorderFrequency = (decimal)s.ReorderFrequency
-                }).Take(10).ToList()
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/WholesalerBusinessInsights - Comprehensive business analytics for Wholesalers
-        [Authorize(Roles = "Wholesaler")]
-        public async Task<IActionResult> WholesalerBusinessInsights(DateTime? startDate, DateTime? endDate)
-        {
-            // Default to last 6 months if no dates provided
-            startDate ??= DateTime.UtcNow.AddMonths(-6);
-            endDate ??= DateTime.UtcNow;
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // Get comprehensive order and product data
-            var orders = await _context.Orders
-                .Include(o => o.Retailer)
                 .Include(o => o.Items)
                     .ThenInclude(oi => oi.WholesalerProduct)
                         .ThenInclude(wp => wp.Product)
                             .ThenInclude(p => p.Category)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Where(o => o.WholesalerId == user.Id && 
-                        o.OrderDate >= startDate && 
-                        o.OrderDate <= endDate)
-                .ToListAsync();
-
-            // Customer lifetime value analysis
-            var customerAnalysis = orders
-                .GroupBy(o => new {
-                    CustomerId = o.RetailerId,
-                    CustomerName = o.Retailer.BusinessName ?? o.Retailer.UserName
-                })
-                .Select(g => new {
-                    CustomerId = g.Key.CustomerId,
-                    CustomerName = g.Key.CustomerName,
-                    TotalOrders = g.Count(),
-                    TotalRevenue = g.Sum(o => o.TotalAmount),
-                    AvgOrderValue = g.Average(o => o.TotalAmount),
-                    FirstOrderDate = g.Min(o => o.OrderDate),
-                    LastOrderDate = g.Max(o => o.OrderDate),
-                    CustomerLifespan = (g.Max(o => o.OrderDate) - g.Min(o => o.OrderDate)).TotalDays,
-                    MonthlyFrequency = g.Count() / Math.Max(1, (DateTime.UtcNow - g.Min(o => o.OrderDate)).TotalDays / 30),
-                    PaymentReliability = g.Where(o => o.Transaction != null).Sum(o => o.Transaction.AmountPaid) / g.Sum(o => o.TotalAmount) * 100
-                })
-                .OrderByDescending(c => c.TotalRevenue)
-                .ToList();
-
-            // Product performance with inventory insights
-            // First, get all WholesalerProducts for this wholesaler
-            var wholesalerProducts = await _context.WholesalerProducts
-                .Include(wp => wp.Product)
-                    .ThenInclude(p => p.Category)
-                .Where(wp => wp.WholesalerId == user.Id)
-                .ToListAsync();
-
-            // Then get all OrderItems for this wholesaler within the date range
-            var wholesalerProductIds = wholesalerProducts.Select(wp => wp.Id).ToList();
-            var orderItemsInPeriod = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Where(oi => oi.WholesalerProductId.HasValue && wholesalerProductIds.Contains(oi.WholesalerProductId.Value) &&
-                           oi.Order.OrderDate >= startDate && 
-                           oi.Order.OrderDate <= endDate)
-                .ToListAsync();
-
-            // Group order items by WholesalerProductId for analysis
-            var orderItemsByProduct = orderItemsInPeriod
-                .GroupBy(oi => oi.WholesalerProductId.Value)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var productAnalysis = wholesalerProducts
-                .Select(wp => {
-                    var productOrderItems = orderItemsByProduct.ContainsKey(wp.Id) 
-                        ? orderItemsByProduct[wp.Id] 
-                        : new List<OrderItem>();
-                    
-                    return new {
-                        ProductId = wp.ProductId,
-                        ProductName = wp.Product.Name,
-                        CategoryName = wp.Product.Category.Name,
-                        CurrentStock = wp.StockQuantity,
-                        CurrentPrice = wp.Price,
-                        IsActive = wp.IsActive,
-                        TotalSold = productOrderItems.Sum(oi => oi.Quantity),
-                        TotalRevenue = productOrderItems.Sum(oi => oi.UnitPrice * oi.Quantity),
-                        OrderCount = productOrderItems.Select(oi => oi.OrderId).Distinct().Count(),
-                        AvgSellPrice = productOrderItems.Any() ? productOrderItems.Average(oi => oi.UnitPrice) : 0,
-                        StockTurnover = wp.StockQuantity > 0 && productOrderItems.Any() ? 
-                            productOrderItems.Sum(oi => oi.Quantity) / (decimal)wp.StockQuantity : 0,
-                        DaysToStockout = productOrderItems.Any() && wp.StockQuantity > 0 ? 
-                            wp.StockQuantity / (productOrderItems.Sum(oi => oi.Quantity) / Math.Max(1, (endDate.Value - startDate.Value).TotalDays)) : 0
-                    };
-                })
-                .OrderByDescending(p => p.TotalRevenue)
-                .ToList();
-
-            // Market trend analysis
-            var marketTrends = orders
-                .SelectMany(o => o.Items)
-                .GroupBy(oi => new { 
-                    Year = oi.Order.OrderDate.Year, 
-                    Month = oi.Order.OrderDate.Month,
-                    Category = oi.WholesalerProduct.Product.Category.Name
-                })
-                .Select(g => new {
-                    Period = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    Category = g.Key.Category,
-                    Revenue = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    Quantity = g.Sum(oi => oi.Quantity),
-                    AvgPrice = g.Average(oi => oi.UnitPrice)
-                })
-                .OrderBy(t => t.Period)
-                .ToList();
-
-            // Seasonal patterns
-            var seasonalPatterns = orders
-                .GroupBy(o => o.OrderDate.Month)
-                .Select(g => new {
-                    Month = g.Key,
-                    MonthName = new DateTime(2000, g.Key, 1).ToString("MMMM"),
-                    TotalOrders = g.Count(),
-                    TotalRevenue = g.Sum(o => o.TotalAmount),
-                    AvgOrderValue = g.Average(o => o.TotalAmount)
-                })
-                .OrderBy(s => s.Month)
-                .ToList();
-
-            var viewModel = new WholesalerBusinessInsightsViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                
-                CustomerAnalysis = customerAnalysis.Select(c => new CustomerAnalysisItem
-                {
-                    CustomerId = c.CustomerId,
-                    CustomerName = c.CustomerName,
-                    TotalOrders = c.TotalOrders,
-                    TotalRevenue = c.TotalRevenue,
-                    AvgOrderValue = (decimal)c.AvgOrderValue,
-                    CustomerLifespan = (int)c.CustomerLifespan,
-                    MonthlyFrequency = (decimal)c.MonthlyFrequency,
-                    PaymentReliability = (decimal)c.PaymentReliability,
-                    LastOrderDate = c.LastOrderDate
-                }).Take(15).ToList(),
-                
-                ProductAnalysis = productAnalysis.Select(p => new WholesalerProductAnalysisItem
-                {
-                    ProductId = p.ProductId,
-                    ProductName = p.ProductName,
-                    CategoryName = p.CategoryName,
-                    CurrentStock = p.CurrentStock,
-                    CurrentPrice = p.CurrentPrice,
-                    IsActive = p.IsActive,
-                    TotalSold = p.TotalSold,
-                    TotalRevenue = p.TotalRevenue,
-                    OrderCount = p.OrderCount,
-                    AvgSellPrice = (decimal)p.AvgSellPrice,
-                    StockTurnover = p.StockTurnover,
-                    DaysToStockout = (int)p.DaysToStockout
-                }).Take(20).ToList(),
-                
-                SeasonalPatterns = seasonalPatterns.Select(s => new SeasonalPatternItem
-                {
-                    Month = s.Month,
-                    MonthName = s.MonthName,
-                    TotalOrders = s.TotalOrders,
-                    TotalRevenue = s.TotalRevenue,
-                    AvgOrderValue = (decimal)s.AvgOrderValue
-                }).ToList(),
-                
-                MarketTrends = marketTrends.GroupBy(t => t.Category)
-                    .Select(g => new MarketTrendItem
-                    {
-                        Category = g.Key,
-                        TrendData = g.Select(t => new TrendDataPoint
-                        {
-                            Period = t.Period,
-                            Revenue = t.Revenue,
-                            Quantity = t.Quantity,
-                            AvgPrice = (decimal)t.AvgPrice
-                        }).ToList()
-                    }).ToList()
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/RetailerProfitabilityAnalysis - ROI and profitability insights for Retailers
-        [Authorize(Roles = "Retailer")]
-        public async Task<IActionResult> RetailerProfitabilityAnalysis(DateTime? startDate, DateTime? endDate)
-        {
-            startDate ??= DateTime.UtcNow.AddMonths(-6);
-            endDate ??= DateTime.UtcNow;
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // This would ideally integrate with retailer's own sales data
-            // For now, we'll analyze purchasing patterns and suggest markup strategies
-            
-            var orderItems = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.WholesalerProduct)
-                    .ThenInclude(wp => wp.Product)
-                        .ThenInclude(p => p.Category)
-                .Where(oi => oi.Order.RetailerId == user.Id && 
-                        oi.Order.OrderDate >= startDate && 
-                        oi.Order.OrderDate <= endDate)
-                .ToListAsync();
-
-            // Cost analysis by category
-            var categoryProfitability = orderItems
-                .GroupBy(oi => oi.WholesalerProduct.Product.Category.Name)
-                .Select(g => new {
-                    Category = g.Key,
-                    TotalCost = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    TotalQuantity = g.Sum(oi => oi.Quantity),
-                    AvgCostPerUnit = g.Average(oi => oi.UnitPrice),
-                    ProductCount = g.Select(oi => oi.WholesalerProduct.ProductId).Distinct().Count(),
-                    SuggestedMarkup = 0.4m, // 40% suggested markup
-                    PotentialRevenue = g.Sum(oi => oi.UnitPrice * oi.Quantity) * 1.4m
-                })
-                .OrderByDescending(c => c.TotalCost)
-                .ToList();
-
-            var viewModel = new RetailerProfitabilityAnalysisViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                CategoryProfitability = categoryProfitability.Select(c => new CategoryProfitabilityItem
-                {
-                    Category = c.Category,
-                    TotalCost = c.TotalCost,
-                    TotalQuantity = c.TotalQuantity,
-                    AvgCostPerUnit = (decimal)c.AvgCostPerUnit,
-                    ProductCount = c.ProductCount,
-                    SuggestedMarkup = c.SuggestedMarkup,
-                    PotentialRevenue = c.PotentialRevenue,
-                    PotentialProfit = c.PotentialRevenue - c.TotalCost
-                }).ToList()
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/UpdatePaymentStatuses - Admin only action to fix payment statuses
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdatePaymentStatuses()
-        {
-            // Get all transactions
-            var transactions = await _context.Transactions.ToListAsync();
-            int updatedCount = 0;
-            
-            foreach (var transaction in transactions)
-            {
-                // Check if payment status needs to be updated
-                if (transaction.AmountPaid >= transaction.Amount && transaction.Status != TransactionStatus.Completed)
-                {
-                    transaction.Status = TransactionStatus.Completed;
-                    _context.Update(transaction);
-                    updatedCount++;
-                }
-                else if (transaction.AmountPaid > 0 && transaction.AmountPaid < transaction.Amount && 
-                         transaction.Status != TransactionStatus.PartiallyPaid)
-                {
-                    transaction.Status = TransactionStatus.PartiallyPaid;
-                    _context.Update(transaction);
-                    updatedCount++;
-                }
-            }
-            
-            await _context.SaveChangesAsync();
-            
-            TempData["Success"] = $"Updated payment status for {updatedCount} transactions.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        // Helper methods for enhanced performance reports
-        private async Task<List<CategorySpendingItem>> GetCategorySpendingAnalysis(string retailerId, DateTime startDate, DateTime endDate)
-        {
-            var orderItems = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.WholesalerProduct)
-                    .ThenInclude(wp => wp.Product)
-                        .ThenInclude(p => p.Category)
-                .Where(oi => oi.Order.RetailerId == retailerId &&
-                           oi.Order.OrderDate >= startDate &&
-                           oi.Order.OrderDate <= endDate &&
-                           oi.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var totalSpent = orderItems.Sum(oi => oi.UnitPrice * oi.Quantity);
-
-            return orderItems
-                .GroupBy(oi => oi.WholesalerProduct.Product.Category.Name)
-                .Select(g => new CategorySpendingItem
-                {
-                    CategoryName = g.Key,
-                    TotalSpent = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    OrderCount = g.Select(oi => oi.OrderId).Distinct().Count(),
-                    ProductCount = g.Select(oi => oi.WholesalerProduct.ProductId).Distinct().Count(),
-                    AvgOrderValue = g.GroupBy(oi => oi.OrderId).Average(og => og.Sum(oi => oi.UnitPrice * oi.Quantity)),
-                    SpendingPercentage = totalSpent > 0 ? (g.Sum(oi => oi.UnitPrice * oi.Quantity) / totalSpent) * 100 : 0
-                })
-                .OrderByDescending(c => c.TotalSpent)
-                .ToList();
-        }
-
-        private async Task<List<MonthlySpendingTrendItem>> GetMonthlySpendingTrends(string retailerId, DateTime startDate, DateTime endDate)
-        {
-            var orders = await _context.Orders
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Where(o => o.RetailerId == retailerId &&
-                           o.OrderDate >= startDate &&
-                           o.OrderDate <= endDate &&
-                           o.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var monthlyData = orders
-                .GroupBy(o => new { Year = o.OrderDate.Year, Month = o.OrderDate.Month })
-                .Select(g => new MonthlySpendingTrendItem
-                {
-                    Month = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    AmountSpent = g.Where(o => o.Transaction != null).Sum(o => o.Transaction.AmountPaid),
-                    OrderCount = g.Count(),
-                    AvgOrderValue = g.Average(o => o.TotalAmount),
-                    GrowthRate = 0 // Will be calculated below
-                })
-                .OrderBy(m => m.Month)
-                .ToList();
-
-            // Calculate growth rates
-            for (int i = 1; i < monthlyData.Count; i++)
-            {
-                var current = monthlyData[i].AmountSpent;
-                var previous = monthlyData[i - 1].AmountSpent;
-                monthlyData[i].GrowthRate = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-            }
-
-            return monthlyData;
-        }
-
-        private decimal CalculateGrowthRate(List<MonthlySpendingTrendItem> trends)
-        {
-            if (trends.Count < 2) return 0;
-            
-            var latestMonth = trends.LastOrDefault();
-            var previousMonth = trends.Count > 1 ? trends[trends.Count - 2] : null;
-            
-            if (latestMonth == null || previousMonth == null || previousMonth.AmountSpent == 0)
-                return 0;
-                
-            return ((latestMonth.AmountSpent - previousMonth.AmountSpent) / previousMonth.AmountSpent) * 100;
-        }
-
-        private async Task<List<CategoryPerformanceItem>> GetCategoryPerformanceAnalysis(string wholesalerId, DateTime startDate, DateTime endDate)
-        {
-            var orderItems = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.WholesalerProduct)
-                    .ThenInclude(wp => wp.Product)
-                        .ThenInclude(p => p.Category)
-                .Where(oi => oi.WholesalerProduct.WholesalerId == wholesalerId &&
-                           oi.Order.OrderDate >= startDate &&
-                           oi.Order.OrderDate <= endDate &&
-                           oi.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var totalRevenue = orderItems.Sum(oi => oi.UnitPrice * oi.Quantity);
-
-            return orderItems
-                .GroupBy(oi => oi.WholesalerProduct.Product.Category.Name)
-                .Select(g => new CategoryPerformanceItem
-                {
-                    CategoryName = g.Key,
-                    TotalRevenue = g.Sum(oi => oi.UnitPrice * oi.Quantity),
-                    QuantitySold = g.Sum(oi => oi.Quantity),
-                    OrderCount = g.Select(oi => oi.OrderId).Distinct().Count(),
-                    AvgPrice = g.Average(oi => oi.UnitPrice),
-                    RevenuePercentage = totalRevenue > 0 ? (g.Sum(oi => oi.UnitPrice * oi.Quantity) / totalRevenue) * 100 : 0,
-                    PerformanceTrend = "Stable" // This could be enhanced with historical comparison
-                })
-                .OrderByDescending(c => c.TotalRevenue)
-                .ToList();
-        }
-
-        private async Task<List<MonthlyRevenueTrendItem>> GetMonthlyRevenueTrends(string wholesalerId, DateTime startDate, DateTime endDate)
-        {
-            var orders = await _context.Orders
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Where(o => o.WholesalerId == wholesalerId &&
-                           o.OrderDate >= startDate &&
-                           o.OrderDate <= endDate &&
-                           o.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var monthlyData = orders
-                .GroupBy(o => new { Year = o.OrderDate.Year, Month = o.OrderDate.Month })
-                .Select(g => new MonthlyRevenueTrendItem
-                {
-                    Month = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    Revenue = g.Where(o => o.Transaction != null).Sum(o => o.Transaction.AmountPaid),
-                    OrderCount = g.Count(),
-                    AvgOrderValue = g.Average(o => o.TotalAmount),
-                    GrowthRate = 0 // Will be calculated below
-                })
-                .OrderBy(m => m.Month)
-                .ToList();
-
-            // Calculate growth rates
-            for (int i = 1; i < monthlyData.Count; i++)
-            {
-                var current = monthlyData[i].Revenue;
-                var previous = monthlyData[i - 1].Revenue;
-                monthlyData[i].GrowthRate = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-            }
-
-            return monthlyData;
-        }
-
-        private async Task<List<InventoryStatusItem>> GetInventoryStatusAnalysis(string wholesalerId, DateTime startDate, DateTime endDate)
-        {
-            var wholesalerProducts = await _context.WholesalerProducts
-                .Include(wp => wp.Product)
-                    .ThenInclude(p => p.Category)
-                .Where(wp => wp.WholesalerId == wholesalerId)
-                .ToListAsync();
-
-            var productIds = wholesalerProducts.Select(wp => wp.Id).ToList();
-            var orderItems = await _context.OrderItems
-                .Include(oi => oi.Order)
-                .Where(oi => oi.WholesalerProductId.HasValue && productIds.Contains(oi.WholesalerProductId.Value) &&
-                           oi.Order.OrderDate >= startDate &&
-                           oi.Order.OrderDate <= endDate &&
-                           oi.Order.Status != OrderStatus.Cancelled) // Exclude cancelled orders
-                .ToListAsync();
-
-            var orderItemsByProduct = orderItems
-                .GroupBy(oi => oi.WholesalerProductId.Value)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            return wholesalerProducts
-                .Select(wp => {
-                    var productOrderItems = orderItemsByProduct.ContainsKey(wp.Id) 
-                        ? orderItemsByProduct[wp.Id] 
-                        : new List<OrderItem>();
-                    
-                    var quantitySold = productOrderItems.Sum(oi => oi.Quantity);
-                    var revenue = productOrderItems.Sum(oi => oi.UnitPrice * oi.Quantity);
-                    var stockTurnover = wp.StockQuantity > 0 ? (decimal)quantitySold / wp.StockQuantity : 0;
-                    
-                    return new InventoryStatusItem
-                    {
-                        ProductName = wp.Product.Name,
-                        CategoryName = wp.Product.Category.Name,
-                        CurrentStock = wp.StockQuantity,
-                        QuantitySold = quantitySold,
-                        Revenue = revenue,
-                        StockStatus = wp.StockQuantity <= 10 ? "Critical" :
-                                    wp.StockQuantity <= 50 ? "Low" :
-                                    wp.StockQuantity <= 200 ? "Normal" : "High",
-                        StockTurnover = stockTurnover
-                    };
-                })
-                .OrderByDescending(i => i.Revenue)
-                .Take(20)
-                .ToList();
-        }
-
-        private decimal CalculateRevenueGrowthRate(List<MonthlyRevenueTrendItem> trends)
-        {
-            if (trends.Count < 2) return 0;
-            
-            var latestMonth = trends.LastOrDefault();
-            var previousMonth = trends.Count > 1 ? trends[trends.Count - 2] : null;
-            
-            if (latestMonth == null || previousMonth == null || previousMonth.Revenue == 0)
-                return 0;
-                
-            return ((latestMonth.Revenue - previousMonth.Revenue) / previousMonth.Revenue) * 100;
-        }
-
-        // GET: Reports/WholesalerPayments - Detailed payment and revenue report for wholesalers
-        [Authorize(Roles = "Wholesaler")]
-        public async Task<IActionResult> WholesalerPayments(DateTime? startDate, DateTime? endDate, string retailerId = null, string paymentStatus = null)
-        {
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow;
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // Get all retailers that have ordered from this wholesaler for filter dropdown
-            var retailerIds = await _context.Orders
-                .Where(o => o.WholesalerId == user.Id)
-                .Select(o => o.RetailerId)
-                .Distinct()
-                .ToListAsync();
-
-            var retailers = await _context.Users
-                .Where(u => retailerIds.Contains(u.Id))
-                .OrderBy(u => u.BusinessName)
-                .ToListAsync();
-
-            // Build base query for orders from this wholesaler (exclude cancelled orders)
-            var ordersQuery = _context.Orders
-                .Include(o => o.Retailer)
-                .Include(o => o.Transaction)
-                    .ThenInclude(t => t.Payments)
-                .Include(o => o.Items)
-                    .ThenInclude(i => i.WholesalerProduct)
-                        .ThenInclude(wp => wp.Product)
-                .Where(o => o.WholesalerId == user.Id && 
-                           o.OrderDate >= startDate && 
-                           o.OrderDate <= endDate &&
-                           o.Status != OrderStatus.Cancelled); // Exclude cancelled orders
-
-            // Apply retailer filter if provided
-            if (!string.IsNullOrEmpty(retailerId))
-            {
-                ordersQuery = ordersQuery.Where(o => o.RetailerId == retailerId);
-            }
-
-            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
-
-            // Calculate summary metrics using actual payments like other reports
-            var totalOrders = orders.Count;
-            var totalPurchases = orders.Sum(o => o.TotalAmount);
-            var totalPaid = orders.Sum(o => o.Transaction?.Payments?.Sum(p => p.Amount) ?? 0);
-            var initialOutstanding = totalPurchases - totalPaid;
-
-            // Ensure all orders have transactions - create missing ones
-            foreach (var order in orders)
-            {
-                if (order.Transaction == null)
-                {
-                    var newTransaction = new Transaction
-                    {
-                        OrderId = order.Id,
-                        Amount = order.TotalAmount,
-                        AmountPaid = 0,
-                        TransactionDate = order.OrderDate,
-                        Payments = new List<Payment>()
-                    };
-                    _context.Transactions.Add(newTransaction);
-                    order.Transaction = newTransaction;
-                }
-            }
-            await _context.SaveChangesAsync();
-
-            // Get all transactions for these orders with current payment data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
-
-            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
-            var transactionLookup = transactions
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            // Update AmountPaid for all transactions first (to ensure accuracy)
-            foreach (var transaction in transactions)
-            {
-                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                if (transaction.AmountPaid != actualAmountPaid)
-                {
-                    transaction.AmountPaid = actualAmountPaid;
-                    _context.Update(transaction);
-                }
-            }
-            await _context.SaveChangesAsync();
-
-            // Update the orders' Transaction objects with the corrected AmountPaid values
-            foreach (var order in orders)
-            {
-                if (transactionLookup.ContainsKey(order.Id))
-                {
-                    order.Transaction = transactionLookup[order.Id];
-                }
-            }
-
-            // Apply payment status filter
-            if (!string.IsNullOrEmpty(paymentStatus))
-            {
-                orders = orders.Where(o => 
-                {
-                    if (!transactionLookup.ContainsKey(o.Id)) return paymentStatus == "unpaid";
-                    var transaction = transactionLookup[o.Id];
-                    var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                    return paymentStatus switch
-                    {
-                        "paid" => actualPaid >= transaction.Amount,
-                        "partial" => actualPaid > 0 && actualPaid < transaction.Amount,
-                        "unpaid" => actualPaid == 0,
-                        "overdue" => actualPaid < transaction.Amount && 
-                                    (DateTime.UtcNow - transaction.TransactionDate).TotalDays > 30,
-                        _ => true
-                    };
-                }).ToList();
-            }
-
-            // Calculate payment summary metrics using actual payments
-            var totalOrderValue = orders.Sum(o => o.TotalAmount);
-            var totalReceived = orders.Where(o => transactionLookup.ContainsKey(o.Id))
-                                     .Sum(o => {
-                                         var transaction = transactionLookup[o.Id];
-                                         return transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                                     });
-            var totalOutstanding = totalOrderValue - totalReceived;
-
-            var fullyPaidOrders = orders.Count(o => {
-                if (!transactionLookup.ContainsKey(o.Id)) return false;
-                var transaction = transactionLookup[o.Id];
-                var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                return actualPaid >= o.TotalAmount;
-            });
-            
-            var partiallyPaidOrders = orders.Count(o => {
-                if (!transactionLookup.ContainsKey(o.Id)) return false;
-                var transaction = transactionLookup[o.Id];
-                var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                return actualPaid > 0 && actualPaid < o.TotalAmount;
-            });
-            
-            var unpaidOrders = orders.Count(o => {
-                if (!transactionLookup.ContainsKey(o.Id)) return true;
-                var transaction = transactionLookup[o.Id];
-                var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                return actualPaid == 0;
-            });
-
-            // Calculate overdue payments (over 30 days)
-            var overdueOrders = orders.Where(o => {
-                if (!transactionLookup.ContainsKey(o.Id)) return false;
-                var transaction = transactionLookup[o.Id];
-                var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                var outstanding = o.TotalAmount - actualPaid;
-                var daysSinceOrder = (DateTime.UtcNow - o.OrderDate).TotalDays;
-                return outstanding > 0 && daysSinceOrder > 30;
-            }).ToList();
-            
-            var overdueAmount = overdueOrders.Sum(o => {
-                var transaction = transactionLookup[o.Id];
-                var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                return o.TotalAmount - actualPaid;
-            });
-
-            // Payment collection rate
-            var collectionRate = totalOrderValue > 0 ? (totalReceived / totalOrderValue) * 100 : 0;
-
-            // Average days to payment
-            var paymentsWithDates = orders.Where(o => transactionLookup.ContainsKey(o.Id) && 
-                                                 transactionLookup[o.Id].Payments.Any())
-                                          .SelectMany(o => transactionLookup[o.Id].Payments
-                                                          .Select(p => (DateTime.UtcNow - o.OrderDate).TotalDays))
-                                          .ToList();
-            var avgDaysToPayment = paymentsWithDates.Any() ? paymentsWithDates.Average() : 0;
-
-            // Monthly revenue trends
-            var monthlyTrends = orders.GroupBy(o => new { o.OrderDate.Year, o.OrderDate.Month })
-                .Select(g => new PaymentMonthlyTrendItem
-                {
-                    Year = g.Key.Year,
-                    Month = g.Key.Month,
-                    OrderCount = g.Count(),
-                    TotalOrdered = g.Sum(o => o.TotalAmount),
-                    TotalReceived = g.Where(o => transactionLookup.ContainsKey(o.Id))
-                                   .Sum(o => {
-                                       var transaction = transactionLookup[o.Id];
-                                       return transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                                   })
-                })
-                .OrderBy(m => m.Year).ThenBy(m => m.Month)
-                .ToList();
-
-            // Payment method analysis
-            var paymentMethods = orders.Where(o => transactionLookup.ContainsKey(o.Id))
-                .SelectMany(o => transactionLookup[o.Id].Payments)
-                .GroupBy(p => p.Method)
-                .Select(g => new PaymentMethodItem
-                {
-                    Method = g.Key.ToString(),
-                    Count = g.Count(),
-                    Amount = g.Sum(p => p.Amount),
-                    Percentage = totalReceived > 0 ? (g.Sum(p => p.Amount) / totalReceived) * 100 : 0
-                })
-                .OrderByDescending(p => p.Amount)
-                .ToList();
-
-            // Recent payments (last 10)
-            var recentPayments = orders.Where(o => transactionLookup.ContainsKey(o.Id))
-                .SelectMany(o => transactionLookup[o.Id].Payments.Select(p => new RecentPaymentItem
-                {
-                    Payment = p,
-                    Order = o,
-                    Retailer = o.Retailer
-                }))
-                .OrderByDescending(x => x.Payment.PaymentDate)
-                .Take(10)
-                .ToList();
-
-            // Aging analysis (outstanding amounts by days)
-            var agingAnalysis = orders.Where(o => {
-                    if (!transactionLookup.ContainsKey(o.Id)) return false;
-                    var transaction = transactionLookup[o.Id];
-                    var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                    return actualPaid < o.TotalAmount;
-                })
-                .GroupBy(o => 
-                {
-                    var days = (DateTime.UtcNow - o.OrderDate).Days;
-                    return days switch
-                    {
-                        <= 30 => "0-30 days",
-                        <= 60 => "31-60 days",
-                        <= 90 => "61-90 days",
-                        _ => "90+ days"
-                    };
-                })
-                .Select(g => new AgingAnalysisItem
-                {
-                    AgeRange = g.Key,
-                    Count = g.Count(),
-                    Amount = g.Sum(o => {
-                        var transaction = transactionLookup[o.Id];
-                        var actualPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                        return o.TotalAmount - actualPaid;
-                    })
-                })
-                .ToList();
-
-            var viewModel = new WholesalerPaymentsReportViewModel
-            {
-                StartDate = startDate.Value,
-                EndDate = endDate.Value,
-                RetailerId = retailerId,
-                PaymentStatus = paymentStatus,
-                WholesalerId = user.Id,
-                WholesalerName = user.BusinessName ?? user.UserName,
-
-                // Summary Metrics
-                TotalOrders = totalOrders,
-                TotalOrderValue = totalOrderValue,
-                TotalReceived = totalReceived,
-                TotalOutstanding = totalOutstanding,
-                CollectionRate = collectionRate,
-                AvgDaysToPayment = avgDaysToPayment,
-
-                // Payment Status Counts
-                FullyPaidOrders = fullyPaidOrders,
-                PartiallyPaidOrders = partiallyPaidOrders,
-                UnpaidOrders = unpaidOrders,
-                OverdueOrders = overdueOrders.Count,
-                OverdueAmount = overdueAmount,
-
-                // Collections
-                Orders = orders,
-                Retailers = retailers,
-                RevenueByRetailer = new List<RetailerRevenueItem>(), // Removed as per user request
-                MonthlyTrends = monthlyTrends,
-                PaymentMethods = paymentMethods,
-                RecentPayments = recentPayments,
-                AgingAnalysis = agingAnalysis
-            };
-
-            return View(viewModel);
-        }
-
-        // GET: Reports/RetailerPurchases - Simple purchase report for retailers
-        [Authorize(Roles = "Retailer")]
-        public async Task<IActionResult> RetailerPurchases(DateTime? startDate, DateTime? endDate, string? supplierId = null)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            // Default to current month if no dates provided
-            startDate ??= new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            endDate ??= DateTime.UtcNow.AddDays(1).AddSeconds(-1);
-
-            // Get all orders (both wholesaler and partnership orders)
-            var ordersQuery = _context.Orders
-                .Include(o => o.Wholesaler)
-                .Include(o => o.Items) // Include order items to get partnership info
                 .Where(o => o.RetailerId == user.Id && 
-                           o.OrderDate >= startDate && 
-                           o.OrderDate <= endDate &&
-                           o.Status != OrderStatus.Cancelled); // Exclude cancelled orders
+                        o.OrderDate >= startDate && 
+                           o.OrderDate < endDate &&  // Use < instead of <= for cleaner boundary logic
+                           o.Status != OrderStatus.Cancelled)
+                .ToListAsync();
 
-            // Apply specific supplier filter if provided
+            // Apply supplier filter after loading (to handle both wholesaler IDs and partner names)
             if (!string.IsNullOrEmpty(supplierId))
             {
-                if (supplierId.StartsWith("wholesaler_"))
+                if (supplierId.StartsWith("PARTNER:"))
                 {
-                    var wholesalerId = supplierId.Replace("wholesaler_", "");
-                    ordersQuery = ordersQuery.Where(o => o.WholesalerId == wholesalerId);
-                }
-                else if (supplierId.StartsWith("partner_"))
-                {
-                    var partnershipId = supplierId.Replace("partner_", "");
-                    // For partner orders, filter by partnership name in the order notes
-                    // First get the partnership name by ID
-                    var partnership = await _context.RetailerPartnerships
-                        .FirstOrDefaultAsync(rp => rp.Id.ToString() == partnershipId && rp.RetailerId == user.Id);
-                    
-                    if (partnership != null)
-                    {
-                        var partnershipName = partnership.PartnershipName;
-                        ordersQuery = ordersQuery.Where(o => o.WholesalerId == null && 
-                            o.Notes != null && 
-                            o.Notes.Contains($"Partnership Order from: {partnershipName}"));
-                    }
-                }
-            }
-
-            var orders = await ordersQuery.OrderByDescending(o => o.OrderDate).ToListAsync();
-
-            // Get all transactions for these orders with current payment data
-            var orderIds = orders.Select(o => o.Id).ToList();
-            var transactions = await _context.Transactions
-                .Include(t => t.Payments)
-                .Where(t => orderIds.Contains(t.OrderId))
-                .ToListAsync();
-
-            // Ensure all orders have transactions - create missing ones
-            var existingTransactionOrderIds = transactions.Select(t => t.OrderId).ToHashSet();
-            foreach (var order in orders)
-            {
-                if (!existingTransactionOrderIds.Contains(order.Id))
-                {
-                    var newTransaction = new Transaction
-                    {
-                        OrderId = order.Id,
-                        Amount = order.TotalAmount,
-                        AmountPaid = 0,
-                        TransactionDate = order.OrderDate,
-                        Status = TransactionStatus.Pending,
-                        Payments = new List<Payment>()
-                    };
-                    _context.Transactions.Add(newTransaction);
-                    transactions.Add(newTransaction);
-                }
-            }
-            await _context.SaveChangesAsync();
-
-            // Create lookup dictionary for transactions by OrderId - handle duplicates by taking first transaction per order
-            var transactionLookup = transactions
-                .GroupBy(t => t.OrderId)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            // Update AmountPaid for all transactions first (to ensure accuracy)
-            foreach (var transaction in transactions)
-            {
-                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
-                if (transaction.AmountPaid != actualAmountPaid)
-                {
-                    transaction.AmountPaid = actualAmountPaid;
-                    
-                    // Update transaction status
-                    if (transaction.AmountPaid >= transaction.Amount)
-                    {
-                        transaction.Status = TransactionStatus.Completed;
-                    }
-                    else if (transaction.AmountPaid > 0)
-                    {
-                        transaction.Status = TransactionStatus.PartiallyPaid;
+                    // Partner filter: extract partner name and filter by partnership orders only
+                    var partnerName = supplierId.Substring("PARTNER:".Length);
+                    orders = orders.Where(o => o.WholesalerId == null && 
+                                             o.Notes != null && 
+                                             o.Notes.StartsWith($"Partnership Order from: {partnerName}"))
+                .ToList();
                     }
                     else
                     {
-                        transaction.Status = TransactionStatus.Pending;
-                    }
+                    // Wholesaler filter: filter by WholesalerId
+                    orders = orders.Where(o => o.WholesalerId == supplierId).ToList();
+                }
+            }
+
+            orders = orders.OrderByDescending(o => o.OrderDate).ToList();
+
+            var orderIds = orders.Select(o => o.Id).ToList();
+            var transactions = await _context.Transactions
+                .Include(t => t.Payments)
+                .Where(t => orderIds.Contains(t.OrderId))
+                .ToListAsync();
+                
+            var transactionLookup = transactions.GroupBy(t => t.OrderId).ToDictionary(g => g.Key, g => g.First());
+
+            // Get all suppliers (both wholesalers and partners) this retailer has ever ordered from
+            var allRetailerOrders = await _context.Orders
+                .Where(o => o.RetailerId == user.Id)
+                .Include(o => o.Wholesaler)
+                    .ToListAsync();
                     
-                    _context.Update(transaction);
-                }
-            }
-            await _context.SaveChangesAsync();
+            var suppliers = new List<SupplierOption>();
 
-            // Calculate summary metrics using the synchronized transaction data
-            var totalOrders = orders.Count;
-            var totalPurchases = orders.Sum(o => o.TotalAmount);
-            var totalPaid = orders.Where(o => transactionLookup.ContainsKey(o.Id))
-                                 .Sum(o => transactionLookup[o.Id].Payments?.Sum(p => p.Amount) ?? 0);
-            var purchasesOutstanding = totalPurchases - totalPaid;
+            // Add wholesalers
+            var wholesalerIds = allRetailerOrders
+                .Where(o => o.WholesalerId != null)
+                .Select(o => o.WholesalerId!)
+                .Distinct()
+                .ToList();
 
-            // Get wholesalers for filter dropdown
-            var wholesalers = await _context.Users.ToListAsync();
-            var wholesalerUsers = new List<ApplicationUser>();
-            foreach (var u in wholesalers)
-            {
-                var roles = await _userManager.GetRolesAsync(u);
-                if (roles.Contains("Wholesaler"))
-                {
-                    wholesalerUsers.Add(u);
-                }
-            }
-
-            // Get partnerships for filter dropdown
-            var partnerships = await _context.RetailerPartnerships
-                .Where(rp => rp.RetailerId == user.Id && rp.IsActive)
+            var wholesalers = await _context.Users
+                .Where(u => wholesalerIds.Contains(u.Id))
                 .ToListAsync();
 
-            // Build the simple view model with transaction data attached
-            var viewModel = new SalesReportViewModel
+            suppliers.AddRange(wholesalers.Select(w => new SupplierOption
+            {
+                Id = w.Id,
+                Name = w.BusinessName ?? w.UserName ?? "Unknown",
+                Type = "Wholesaler"
+            }));
+
+            // Add partners (extract ONLY from partnership orders - external orders have RetailerId=null so never appear in retailer reports)
+            var partnershipOrders = allRetailerOrders
+                .Where(o => o.WholesalerId == null && 
+                           o.Notes != null &&
+                           o.Notes.StartsWith("Partnership Order from: "))
+                .ToList();
+
+            var partnerNames = partnershipOrders
+                .Select(o => o.Notes!.Substring("Partnership Order from: ".Length).Split('\n')[0])
+                .Distinct()
+                .ToList();
+
+            suppliers.AddRange(partnerNames.Select(p => new SupplierOption
+            {
+                Id = $"PARTNER:{p}",
+                Name = p,
+                Type = "Partner"
+            }));
+
+            // Sort suppliers by type then by name
+            suppliers = suppliers.OrderBy(s => s.Type).ThenBy(s => s.Name).ToList();
+
+            // Calculate spending by category (include both wholesaler and partnership orders)
+            var wholesalerCategorySpending = orders
+                .SelectMany(o => o.Items ?? new List<OrderItem>())
+                .Where(i => i.WholesalerProduct?.Product?.Category != null)
+                .GroupBy(i => new { 
+                    CategoryId = i.WholesalerProduct.Product.Category.Id,
+                    CategoryName = i.WholesalerProduct.Product.Category.Name
+                })
+                .Select(g => new {
+                    CategoryName = g.Key.CategoryName,
+                    TotalSpent = g.Sum(i => i.Subtotal),
+                    OrderCount = g.Select(i => i.OrderId).Distinct().Count(),
+                    ProductCount = g.Select(i => i.WholesalerProduct.ProductId).Distinct().Count()
+                });
+
+            // Get partnership order category spending
+            var partnershipOrderIds = orders.Where(o => o.WholesalerId == null).Select(o => o.Id).ToList();
+            var partnershipOrderItems = await _context.OrderItems
+                .Where(oi => partnershipOrderIds.Contains(oi.OrderId) && 
+                            oi.PartnerProductId != null)
+                .ToListAsync();
+
+            // Get partner products with categories for these order items
+            var partnerProductIds = partnershipOrderItems.Select(oi => oi.PartnerProductId!.Value).Distinct().ToList();
+            var partnerProducts = await _context.RetailerPartnerProducts
+                .Include(rpp => rpp.Category)
+                .Where(rpp => partnerProductIds.Contains(rpp.Id))
+                .ToListAsync();
+
+            var partnershipCategorySpending = partnershipOrderItems
+                .Join(partnerProducts, 
+                      oi => oi.PartnerProductId, 
+                      rpp => rpp.Id, 
+                      (oi, rpp) => new { OrderItem = oi, PartnerProduct = rpp })
+                .Where(x => x.PartnerProduct.Category != null)
+                .GroupBy(x => new {
+                    CategoryId = x.PartnerProduct.Category!.Id,
+                    CategoryName = x.PartnerProduct.Category.Name
+                })
+                .Select(g => new {
+                    CategoryName = g.Key.CategoryName,
+                    TotalSpent = g.Sum(x => x.OrderItem.Subtotal),
+                    OrderCount = g.Select(x => x.OrderItem.OrderId).Distinct().Count(),
+                    ProductCount = g.Select(x => x.OrderItem.PartnerProductId).Distinct().Count()
+                })
+                .ToList();
+
+            // Combine and aggregate both types of spending
+            var allCategorySpending = wholesalerCategorySpending.ToList()
+                .Concat(partnershipCategorySpending)
+                .GroupBy(c => c.CategoryName)
+                .Select(g => new RetailerCategorySpending
+                {
+                    CategoryName = g.Key,
+                    TotalSpent = g.Sum(c => c.TotalSpent),
+                    OrderCount = g.Sum(c => c.OrderCount),
+                    ProductCount = g.Sum(c => c.ProductCount)
+                })
+                .OrderByDescending(c => c.TotalSpent)
+                .Take(5)
+                .ToList();
+
+            var viewModel = new RetailerPurchasesViewModel
             {
                 StartDate = startDate.Value,
                 EndDate = endDate.Value,
-                RetailerId = supplierId, // Reusing this field for supplier filter
-                
-                // Summary metrics
-                TotalOrders = totalOrders,
-                TotalSales = totalPurchases,
-                ActualRevenue = totalPaid,
-                OutstandingAmount = purchasesOutstanding,
-                CollectionRate = totalPurchases > 0 ? (totalPaid / totalPurchases) * 100 : 0,
-                
-                // Orders collection - manually attach transaction data since navigation is ignored
-                Orders = orders.Select(o => {
-                    // Manually attach transaction information
-                    if (transactionLookup.ContainsKey(o.Id))
-                    {
-                        // Create a new order object with transaction attached for display
-                        return new Order
-                        {
-                            Id = o.Id,
-                            OrderDate = o.OrderDate,
-                            TotalAmount = o.TotalAmount,
-                            Status = o.Status,
-                            Notes = o.Notes,
-                            WholesalerId = o.WholesalerId,
-                            RetailerId = o.RetailerId,
-                            Wholesaler = o.Wholesaler,
-                            Items = o.Items,
-                            // Manually set the transaction since navigation is ignored
-                            Transaction = transactionLookup[o.Id]
-                        };
-                    }
-                    return o;
-                }).ToList(),
-                
-                // For filter dropdowns
-                Wholesalers = wholesalerUsers,
-                Retailers = partnerships.Select(p => new ApplicationUser { Id = p.Id.ToString(), BusinessName = p.WholesalerName }).ToList()
+                SupplierId = supplierId,
+                Orders = orders,
+                TransactionLookup = transactionLookup,
+                Suppliers = suppliers,
+                TotalSpent = orders.Sum(o => o.TotalAmount),
+                TotalPaid = orders.Where(o => transactionLookup.ContainsKey(o.Id))
+                                 .Sum(o => transactionLookup[o.Id].AmountPaid),
+                SpendingByCategory = allCategorySpending
             };
 
-            // Pass filter values to view
-            ViewBag.SupplierId = supplierId;
-
             return View(viewModel);
+        }
+
+        // System maintenance function
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdatePaymentStatuses()
+        {
+            var transactions = await _context.Transactions
+                .Include(t => t.Payments)
+                .ToListAsync();
+
+            var updatedCount = 0;
+            foreach (var transaction in transactions)
+            {
+                var actualAmountPaid = transaction.Payments?.Sum(p => p.Amount) ?? 0;
+                if (transaction.AmountPaid != actualAmountPaid)
+                {
+                    transaction.AmountPaid = actualAmountPaid;
+                    updatedCount++;
+                }
+
+                var newStatus = actualAmountPaid >= transaction.Amount ? TransactionStatus.Completed :
+                               actualAmountPaid > 0 ? TransactionStatus.PartiallyPaid : TransactionStatus.Pending;
+
+                if (transaction.Status != newStatus)
+                {
+                    transaction.Status = newStatus;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0)
+            {
+            await _context.SaveChangesAsync();
+            }
+
+            TempData["Success"] = $"Updated {updatedCount} payment records.";
+            return RedirectToAction("Index");
         }
     }
 } 

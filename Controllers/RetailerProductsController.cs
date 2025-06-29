@@ -195,24 +195,41 @@ namespace DFTRK.Controllers
                     return NotFound();
                 }
 
-                // Check if the navigation properties are valid
-                if (retailerProduct.WholesalerProduct == null || retailerProduct.WholesalerProduct.Product == null)
-                {
-                    TempData["Error"] = "This product has missing or invalid data. It may have been deleted by the wholesaler.";
-                    return RedirectToAction(nameof(Index));
-                }
+                // Handle both wholesaler and partnership products - no longer showing errors for missing data
 
-                // Check if there are other entries for the same product
-                var totalQuantity = await _context.RetailerProducts
-                    .Where(rp => rp.RetailerId == user.Id && 
-                           rp.WholesalerProductId == retailerProduct.WholesalerProductId)
-                    .SumAsync(rp => rp.StockQuantity);
 
-                // If there are multiple entries, update the view with the total quantity
-                if (totalQuantity != retailerProduct.StockQuantity)
+
+                // Add ViewBag data for partnership products
+                if (retailerProduct.WholesalerProductId == null)
                 {
-                    ViewBag.TotalQuantity = totalQuantity;
-                    ViewBag.HasMultipleEntries = true;
+                    // Partnership product - extract information from notes
+                    var partnerProductId = ExtractPartnerProductIdFromNotes(retailerProduct.Notes);
+                    if (partnerProductId.HasValue)
+                    {
+                        var partnerProduct = await _context.RetailerPartnerProducts
+                            .Include(pp => pp.Category)
+                            .Include(pp => pp.Partnership)
+                            .FirstOrDefaultAsync(pp => pp.Id == partnerProductId.Value);
+                        
+                        if (partnerProduct != null)
+                        {
+                            ViewBag.ProductName = partnerProduct.Name;
+                            ViewBag.CategoryName = partnerProduct.Category?.Name;
+                            ViewBag.SupplierName = partnerProduct.Partnership?.WholesalerName ?? partnerProduct.Partnership?.PartnershipName;
+                        }
+                        else
+                        {
+                            ViewBag.ProductName = ExtractProductNameFromNotes(retailerProduct.Notes);
+                            ViewBag.CategoryName = "Partnership Category";
+                            ViewBag.SupplierName = "Partnership Supplier";
+                        }
+                    }
+                    else
+                    {
+                        ViewBag.ProductName = ExtractProductNameFromNotes(retailerProduct.Notes);
+                        ViewBag.CategoryName = "Partnership Category";
+                        ViewBag.SupplierName = "Partnership Supplier";
+                    }
                 }
 
                 return View(retailerProduct);
@@ -250,17 +267,25 @@ namespace DFTRK.Controllers
                     return NotFound();
                 }
                 
-                // Check if the navigation properties are valid
-                if (retailerProduct.WholesalerProduct == null || retailerProduct.WholesalerProduct.Product == null)
+                // Handle both wholesaler and partnership products
+                
+                // Determine product name based on type
+                string productName;
+                if (retailerProduct.WholesalerProductId.HasValue && retailerProduct.WholesalerProduct?.Product != null)
                 {
-                    TempData["Error"] = "This product has missing or invalid data. It may have been deleted by the wholesaler.";
-                    return RedirectToAction(nameof(Index));
+                    // Wholesaler product
+                    productName = retailerProduct.WholesalerProduct.Product.Name;
+                }
+                else
+                {
+                    // Partnership product - extract name from notes
+                    productName = ExtractProductNameFromNotes(retailerProduct.Notes) ?? "Partnership Product";
                 }
                 
                 var model = new RetailerProductEditViewModel
                 {
                     Id = retailerProduct.Id,
-                    ProductName = retailerProduct.WholesalerProduct.Product.Name,
+                    ProductName = productName,
                     PurchasePrice = retailerProduct.PurchasePrice,
                     SellingPrice = retailerProduct.SellingPrice,
                     StockQuantity = retailerProduct.StockQuantity

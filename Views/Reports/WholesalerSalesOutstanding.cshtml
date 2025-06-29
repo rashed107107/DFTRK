@@ -29,13 +29,13 @@
                                    value="@Model.EndDate.ToString("yyyy-MM-dd")" />
                         </div>
                         <div class="col-md-3">
-                            <label for="retailerFilter" class="form-label">Customer Filter</label>
-                            <select class="form-select" id="retailerFilter" name="retailerFilter">
+                            <label for="customerFilter" class="form-label">Customer Filter</label>
+                            <select class="form-select" id="customerFilter" name="customerFilter">
                                 <option value="">All Customers</option>
-                                @foreach (var retailer in Model.AvailableRetailers)
+                                @foreach (var customer in Model.AvailableRetailers)
                                 {
-                                    <option value="@retailer.Id" selected="@(Model.RetailerFilter == retailer.Id)">
-                                        @retailer.Name
+                                    <option value="@customer.Id" selected="@(Model.RetailerFilter == customer.Id)">
+                                        @customer.Name (@customer.Type)
                                     </option>
                                 }
                             </select>
@@ -52,44 +52,97 @@
     </div>
 
     <!-- Summary Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3">
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
             <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="bi bi-graph-up me-2"></i>Total Sales</h5>
-                    <h3>$@Model.TotalSales.ToString("N2")</h3>
-                    <small>@Model.TotalOrders orders</small>
+                <div class="card-body text-center">
+                    <h5>@Model.TotalOrders</h5>
+                    <small>Total Orders</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-success text-white">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="bi bi-check-circle me-2"></i>Total Paid</h5>
-                    <h3>$@Model.TotalPaid.ToString("N2")</h3>
-                    <small>@Model.PaidOrders paid orders</small>
+                <div class="card-body text-center">
+                    <h5>$@Model.TotalSales.ToString("N0")</h5>
+                    <small>Total Sales</small>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-white">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="bi bi-clock me-2"></i>Outstanding</h5>
-                    <h3>$@Model.TotalOutstanding.ToString("N2")</h3>
-                    <small>@Model.UnpaidOrders unpaid orders</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="bi bi-percent me-2"></i>Collection Rate</h5>
-                    <h3>@((Model.TotalSales > 0 ? (Model.TotalPaid / Model.TotalSales) * 100 : 0).ToString("N1"))%</h3>
-                    <small>of total sales</small>
+                <div class="card-body text-center">
+                    <h5>$@Model.TotalPaid.ToString("N0")</h5>
+                    <small>Amount Collected</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h5>$@Model.TotalOutstanding.ToString("N0")</h5>
+                    <small>Outstanding</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5>@Model.PaidOrders</h5>
+                    <small>Paid Orders</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h5>@Model.UnpaidOrders</h5>
+                    <small>Unpaid Orders</small>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Top Products Section -->
+    @if (Model.TopProducts.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-bar"></i> Top 5 Best-Selling Products</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th class="text-end">Quantity Sold</th>
+                                        <th class="text-end">Revenue</th>
+                                        <th class="text-end">Orders</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in Model.TopProducts)
+                                    {
+                                        <tr>
+                                            <td><strong>@product.ProductName</strong></td>
+                                            <td><span class="badge bg-secondary">@product.CategoryName</span></td>
+                                            <td class="text-end">@product.QuantitySold</td>
+                                            <td class="text-end"><strong>$@product.Revenue.ToString("N2")</strong></td>
+                                            <td class="text-end">@product.OrderCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 
     <!-- Sales Table -->
     <div class="row">

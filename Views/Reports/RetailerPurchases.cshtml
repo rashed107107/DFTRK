@@ -1,4 +1,4 @@
-@model DFTRK.ViewModels.SalesReportViewModel
+@model DFTRK.ViewModels.RetailerPurchasesViewModel
 
 @{
     ViewData["Title"] = "Purchase Report";
@@ -31,22 +31,17 @@
                     <label for="supplierId" class="form-label">Specific Supplier</label>
                     <select class="form-select" id="supplierId" name="supplierId">
                         <option value="">All Suppliers</option>
-                        <optgroup label="Wholesalers">
-                            @foreach (var wholesaler in Model.Wholesalers)
+                        @foreach (var supplier in Model.Suppliers)
+                        {
+                            @if (Model.SupplierId == supplier.Id)
                             {
-                                <option value="wholesaler_@wholesaler.Id" selected="@(ViewBag.SupplierId == $"wholesaler_{wholesaler.Id}")">
-                                    @wholesaler.BusinessName
-                                </option>
+                                <option value="@supplier.Id" selected>@supplier.DisplayName</option>
                             }
-                        </optgroup>
-                        <optgroup label="Partners">
-                            @foreach (var partner in Model.Retailers)
+                            else
                             {
-                                <option value="partner_@partner.Id" selected="@(ViewBag.SupplierId == $"partner_{partner.Id}")">
-                                    @partner.BusinessName
-                                </option>
+                                <option value="@supplier.Id">@supplier.DisplayName</option>
                             }
-                        </optgroup>
+                        }
                     </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -66,7 +61,7 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h4 class="text-primary">@Model.TotalOrders</h4>
+                    <h4 class="text-primary">@Model.Orders.Count()</h4>
                     <p class="mb-0">Total Orders</p>
                 </div>
             </div>
@@ -74,7 +69,7 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h4 class="text-success">$@Model.TotalSales.ToString("N2")</h4>
+                    <h4 class="text-success">$@Model.TotalSpent.ToString("N2")</h4>
                     <p class="mb-0">Total Purchases</p>
                 </div>
             </div>
@@ -82,7 +77,7 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h4 class="text-info">$@Model.ActualRevenue.ToString("N2")</h4>
+                    <h4 class="text-info">$@Model.TotalPaid.ToString("N2")</h4>
                     <p class="mb-0">Total Paid</p>
                 </div>
             </div>
@@ -90,12 +85,62 @@
         <div class="col-md-3">
             <div class="card text-center">
                 <div class="card-body">
-                    <h4 class="text-warning">$@Model.OutstandingAmount.ToString("N2")</h4>
+                    <h4 class="text-warning">$@((Model.TotalSpent - Model.TotalPaid).ToString("N2"))</h4>
                     <p class="mb-0">Outstanding</p>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <p><strong>Total Paid:</strong> <span class="text-success">$@Model.TotalPaid.ToString("N2")</span></p>
+            <p><strong>Outstanding Balance:</strong> <span class="text-danger">$@((Model.TotalSpent - Model.TotalPaid).ToString("N2"))</span></p>
+        </div>
+    </div>
+
+    <!-- Spending by Category Section -->
+    @if (Model.SpendingByCategory.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-pie"></i> Top 5 Categories by Spending</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th class="text-end">Total Spent</th>
+                                        <th class="text-end">Orders</th>
+                                        <th class="text-end">Products</th>
+                                        <th class="text-end">Avg per Order</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var category in Model.SpendingByCategory)
+                                    {
+                                        <tr>
+                                            <td><strong>@category.CategoryName</strong></td>
+                                            <td class="text-end"><strong>$@category.TotalSpent.ToString("N2")</strong></td>
+                                            <td class="text-end">@category.OrderCount</td>
+                                            <td class="text-end">@category.ProductCount</td>
+                                            <td class="text-end">$@((category.OrderCount > 0 ? category.TotalSpent / category.OrderCount : 0).ToString("N2"))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <h3>Purchase History</h3>
 
     <!-- Orders Table -->
     <div class="card">
@@ -122,10 +167,10 @@
                         <tbody>
                             @foreach (var order in Model.Orders)
                             {
-                                // Get transaction for this order (now guaranteed to exist and be synchronized)
-                                var transaction = order.Transaction;
+                                // Get transaction for this order using the TransactionLookup dictionary
+                                Model.TransactionLookup.TryGetValue(order.Id, out var transaction);
                                 
-                                // Use the AmountPaid that was calculated and updated by the controller (same as payments pages)
+                                // Use the AmountPaid from the transaction lookup
                                 var amountPaid = transaction?.AmountPaid ?? 0;
                                 var orderTotal = order.TotalAmount;
                                 var outstanding = Math.Max(0, orderTotal - amountPaid);
